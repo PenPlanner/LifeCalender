@@ -38,9 +38,9 @@ export function DayColumn({
   const maxHealthModuleHeight = Math.max(60 + (maxWorkouts * 25), 120); // Larger for metrics + workouts
   const maxTodoModuleHeight = Math.max(40 + (maxTodos * 20), 80); // Larger for todos
   
-  // Calculate the actual height needed for this day's content
-  const thisHealthHeight = Math.max(60 + (currentWorkouts * 25), 120);
-  const thisTodoHeight = Math.max(40 + (currentTodos * 20), 80);
+  // Calculate the actual height needed for this day's content (for future use)
+  // const thisHealthHeight = Math.max(60 + (currentWorkouts * 25), 120);
+  // const thisTodoHeight = Math.max(40 + (currentTodos * 20), 80);
   
   
   return (

@@ -4,11 +4,10 @@ import { SUPPLEMENT_LABELS } from '../types';
 interface SupplementItemProps {
   supplementKey: string;
   isTaken: boolean;
-  date: string;
   onToggle: (key: string) => void;
 }
 
-function SupplementItem({ supplementKey, isTaken, date, onToggle }: SupplementItemProps) {
+function SupplementItem({ supplementKey, isTaken, onToggle }: SupplementItemProps) {
   const supplement = SUPPLEMENT_LABELS[supplementKey as keyof typeof SUPPLEMENT_LABELS];
 
   return (
@@ -68,7 +67,6 @@ export function SupplementTracker({ supplements, date, onToggle }: SupplementTra
             key={key}
             supplementKey={key}
             isTaken={getSupplementStatus(key)}
-            date={date}
             onToggle={onToggle}
           />
         ))}

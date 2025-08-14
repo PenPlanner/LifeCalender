@@ -219,7 +219,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                 <span className="text-xs text-base-content/70">Steg</span>
               </div>
               <span className="text-xs font-semibold text-red-600">
-                {metrics.steps?.toLocaleString() || '0'}
+                {metrics?.steps?.toLocaleString() || '0'}
               </span>
             </div>
           )}
@@ -231,7 +231,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                 <span className="text-xs text-base-content/70">Cardio</span>
               </div>
               <span className="text-xs font-semibold text-red-600">
-                {metrics.cardio_minutes || 0}min
+                {metrics?.cardio_minutes || 0}min
               </span>
             </div>
           )}
@@ -243,7 +243,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                 <span className="text-xs text-base-content/70">Kcal</span>
               </div>
               <span className="text-xs font-semibold text-red-600">
-                {metrics.calories_out || 0}
+                {metrics?.calories_out || 0}
               </span>
             </div>
           )}
