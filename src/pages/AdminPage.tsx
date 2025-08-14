@@ -343,125 +343,218 @@ export function AdminPage() {
           )}
 
           {activeTab === 'data-selection' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Välj hälsodata att visa</h2>
-              <p className="text-base-content/70">
-                Välj vilka mätvärden från Withings som ska visas i din hälsodata-modul
-              </p>
+            <div className="space-y-8">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-base-content mb-2">Hälsodata Konfiguration</h2>
+                <p className="text-base-content/70 max-w-2xl mx-auto">
+                  Anpassa vilka hälsomätvärden som ska visas i din kalender. Välj från våra kategoriserade alternativ nedan.
+                </p>
+              </div>
 
-              <div className="grid lg:grid-cols-2 xl:grid-cols-4 gap-6">
+              {/* Stats Cards */}
+              <div className="grid md:grid-cols-4 gap-4">
+                <div className="stats stats-vertical lg:stats-horizontal shadow">
+                  <div className="stat">
+                    <div className="stat-figure text-primary">
+                      <Activity size={24} />
+                    </div>
+                    <div className="stat-title">Aktiverade</div>
+                    <div className="stat-value text-primary">
+                      {Object.values(healthConfig).filter(Boolean).length}
+                    </div>
+                    <div className="stat-desc">av {Object.keys(healthConfig).length} mätvärden</div>
+                  </div>
+                </div>
+                
+                <div className="stats stats-vertical lg:stats-horizontal shadow">
+                  <div className="stat">
+                    <div className="stat-figure text-secondary">
+                      <Scale size={24} />
+                    </div>
+                    <div className="stat-title">Kroppsmått</div>
+                    <div className="stat-value text-secondary">
+                      {['weight', 'fatMass', 'muscleMass', 'bmi', 'basalMetabolicRate'].filter(key => healthConfig[key as keyof HealthDataConfig]).length}
+                    </div>
+                    <div className="stat-desc">av 5 alternativ</div>
+                  </div>
+                </div>
+
+                <div className="stats stats-vertical lg:stats-horizontal shadow">
+                  <div className="stat">
+                    <div className="stat-figure text-accent">
+                      <Heart size={24} />
+                    </div>
+                    <div className="stat-title">Hjärta</div>
+                    <div className="stat-value text-accent">
+                      {['restingHeartRate', 'continuousHeartRate', 'heartRateVariability', 'systolicBP', 'diastolicBP'].filter(key => healthConfig[key as keyof HealthDataConfig]).length}
+                    </div>
+                    <div className="stat-desc">av 5 alternativ</div>
+                  </div>
+                </div>
+
+                <div className="stats stats-vertical lg:stats-horizontal shadow">
+                  <div className="stat">
+                    <div className="stat-figure text-info">
+                      <Moon size={24} />
+                    </div>
+                    <div className="stat-title">Sömn</div>
+                    <div className="stat-value text-info">
+                      {['sleepDuration', 'sleepEfficiency', 'deepSleep', 'lightSleep', 'remSleep', 'sleepScore'].filter(key => healthConfig[key as keyof HealthDataConfig]).length}
+                    </div>
+                    <div className="stat-desc">av 6 alternativ</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="divider">
+                <span className="text-base-content/60">Konfigurera Kategorier</span>
+              </div>
+
+              <div className="grid lg:grid-cols-2 xl:grid-cols-3 gap-8">
                 {/* Scales Metrics */}
-                <div className="card bg-base-200">
-                  <div className="card-body">
-                    <h3 className="card-title text-lg">
-                      <Scale size={20} />
+                <div className="card bg-gradient-to-br from-secondary/5 to-secondary/10 border border-secondary/20 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="card-body p-6">
+                    <h3 className="card-title text-xl text-secondary mb-4">
+                      <div className="p-2 bg-secondary/10 rounded-lg">
+                        <Scale size={24} />
+                      </div>
                       Våg & Kropp
                     </h3>
+                    <p className="text-sm text-base-content/60 mb-4">
+                      Mätvärden från smart våg och kroppsmätningar
+                    </p>
                     <div className="space-y-3">
                       {[
-                        { key: 'weight', label: 'Vikt (kg)' },
-                        { key: 'bmi', label: 'BMI' },
-                        { key: 'fatMass', label: 'Fettmassa' },
-                        { key: 'muscleMass', label: 'Muskelmassa' },
-                        { key: 'basalMetabolicRate', label: 'Basalmetabolism' },
-                      ].map(({ key, label }) => (
-                        <label key={key} className="cursor-pointer label">
-                          <span className="label-text text-sm">{label}</span>
+                        { key: 'weight', label: 'Vikt (kg)', desc: 'Din aktuella kroppsvikt' },
+                        { key: 'bmi', label: 'BMI', desc: 'Body Mass Index beräkning' },
+                        { key: 'fatMass', label: 'Fettmassa (kg)', desc: 'Mängd kroppsfett i kilogram' },
+                        { key: 'muscleMass', label: 'Muskelmassa (kg)', desc: 'Total muskelvikt' },
+                        { key: 'basalMetabolicRate', label: 'Basalmetabolism', desc: 'Viloenergiförbrukning per dag' },
+                      ].map(({ key, label, desc }) => (
+                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{label}</div>
+                            <div className="text-xs text-base-content/60">{desc}</div>
+                          </div>
                           <input
                             type="checkbox"
-                            className="checkbox checkbox-primary checkbox-sm"
+                            className="checkbox checkbox-secondary"
                             checked={healthConfig[key as keyof HealthDataConfig]}
                             onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
                           />
-                        </label>
+                        </div>
                       ))}
                     </div>
                   </div>
                 </div>
 
                 {/* Activity Metrics */}
-                <div className="card bg-base-200">
-                  <div className="card-body">
-                    <h3 className="card-title text-lg">
-                      <Activity size={20} />
-                      Aktivitet
+                <div className="card bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="card-body p-6">
+                    <h3 className="card-title text-xl text-primary mb-4">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Activity size={24} />
+                      </div>
+                      Aktivitet & Träning
                     </h3>
+                    <p className="text-sm text-base-content/60 mb-4">
+                      Dagliga aktiviteter och träningsstatistik
+                    </p>
                     <div className="space-y-3">
                       {[
-                        { key: 'steps', label: 'Steg' },
-                        { key: 'distance', label: 'Distans (km)' },
-                        { key: 'calories', label: 'Kalorier' },
-                        { key: 'activeMinutes', label: 'Aktiva minuter' },
-                        { key: 'vo2Max', label: 'VO2 Max' },
-                      ].map(({ key, label }) => (
-                        <label key={key} className="cursor-pointer label">
-                          <span className="label-text text-sm">{label}</span>
+                        { key: 'steps', label: 'Steg', desc: 'Antal steg per dag' },
+                        { key: 'distance', label: 'Distans (km)', desc: 'Tillryggalagd sträcka' },
+                        { key: 'calories', label: 'Kalorier', desc: 'Förbrända kalorier' },
+                        { key: 'activeMinutes', label: 'Aktiva minuter', desc: 'Tid i måttlig/hög aktivitet' },
+                        { key: 'vo2Max', label: 'VO2 Max', desc: 'Maximal syreupptagningsförmåga' },
+                      ].map(({ key, label, desc }) => (
+                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{label}</div>
+                            <div className="text-xs text-base-content/60">{desc}</div>
+                          </div>
                           <input
                             type="checkbox"
-                            className="checkbox checkbox-primary checkbox-sm"
+                            className="checkbox checkbox-primary"
                             checked={healthConfig[key as keyof HealthDataConfig]}
                             onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
                           />
-                        </label>
+                        </div>
                       ))}
                     </div>
                   </div>
                 </div>
 
                 {/* Heart Metrics */}
-                <div className="card bg-base-200">
-                  <div className="card-body">
-                    <h3 className="card-title text-lg">
-                      <Heart size={20} />
-                      Hjärta & Puls
+                <div className="card bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/20 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="card-body p-6">
+                    <h3 className="card-title text-xl text-accent mb-4">
+                      <div className="p-2 bg-accent/10 rounded-lg">
+                        <Heart size={24} />
+                      </div>
+                      Hjärta & Blodtryck
                     </h3>
+                    <p className="text-sm text-base-content/60 mb-4">
+                      Hjärt- och kärlhälsomätningar
+                    </p>
                     <div className="space-y-3">
                       {[
-                        { key: 'restingHeartRate', label: 'Vilopuls' },
-                        { key: 'continuousHeartRate', label: 'Kontinuerlig puls' },
-                        { key: 'heartRateVariability', label: 'Pulsvariabilitet' },
-                        { key: 'systolicBP', label: 'Systoliskt BT' },
-                        { key: 'diastolicBP', label: 'Diastoliskt BT' },
-                      ].map(({ key, label }) => (
-                        <label key={key} className="cursor-pointer label">
-                          <span className="label-text text-sm">{label}</span>
+                        { key: 'restingHeartRate', label: 'Vilopuls (bpm)', desc: 'Hjärtfrekvens i vila' },
+                        { key: 'continuousHeartRate', label: 'Kontinuerlig puls', desc: 'Puls under dagen' },
+                        { key: 'heartRateVariability', label: 'Pulsvariabilitet', desc: 'HRV-mätning för återhämtning' },
+                        { key: 'systolicBP', label: 'Systoliskt BT (mmHg)', desc: 'Övre blodtrycksvärde' },
+                        { key: 'diastolicBP', label: 'Diastoliskt BT (mmHg)', desc: 'Nedre blodtrycksvärde' },
+                      ].map(({ key, label, desc }) => (
+                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{label}</div>
+                            <div className="text-xs text-base-content/60">{desc}</div>
+                          </div>
                           <input
                             type="checkbox"
-                            className="checkbox checkbox-primary checkbox-sm"
+                            className="checkbox checkbox-accent"
                             checked={healthConfig[key as keyof HealthDataConfig]}
                             onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
                           />
-                        </label>
+                        </div>
                       ))}
                     </div>
                   </div>
                 </div>
 
                 {/* Sleep Metrics */}
-                <div className="card bg-base-200">
-                  <div className="card-body">
-                    <h3 className="card-title text-lg">
-                      <Moon size={20} />
-                      Sömn
+                <div className="card bg-gradient-to-br from-info/5 to-info/10 border border-info/20 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="card-body p-6">
+                    <h3 className="card-title text-xl text-info mb-4">
+                      <div className="p-2 bg-info/10 rounded-lg">
+                        <Moon size={24} />
+                      </div>
+                      Sömn & Vila
                     </h3>
+                    <p className="text-sm text-base-content/60 mb-4">
+                      Sömnkvalitet och viloanalys
+                    </p>
                     <div className="space-y-3">
                       {[
-                        { key: 'sleepDuration', label: 'Sömntid (h)' },
-                        { key: 'sleepEfficiency', label: 'Sömneffektivitet' },
-                        { key: 'sleepScore', label: 'Sömnpoäng' },
-                        { key: 'deepSleep', label: 'Djupsömn' },
-                        { key: 'lightSleep', label: 'Lättsömn' },
-                        { key: 'remSleep', label: 'REM-sömn' },
-                      ].map(({ key, label }) => (
-                        <label key={key} className="cursor-pointer label">
-                          <span className="label-text text-sm">{label}</span>
+                        { key: 'sleepDuration', label: 'Sömntid (h)', desc: 'Total sömntid per natt' },
+                        { key: 'sleepEfficiency', label: 'Sömneffektivitet (%)', desc: 'Andel tid i sömn vs i säng' },
+                        { key: 'sleepScore', label: 'Sömnpoäng', desc: 'Övergripande sömnkvalitetsbetyg' },
+                        { key: 'deepSleep', label: 'Djupsömn (h)', desc: 'Tid i djup, återställande sömn' },
+                        { key: 'lightSleep', label: 'Lättsömn (h)', desc: 'Tid i lätt sömnfas' },
+                        { key: 'remSleep', label: 'REM-sömn (h)', desc: 'Tid i drömfasen' },
+                      ].map(({ key, label, desc }) => (
+                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{label}</div>
+                            <div className="text-xs text-base-content/60">{desc}</div>
+                          </div>
                           <input
                             type="checkbox"
-                            className="checkbox checkbox-primary checkbox-sm"
+                            className="checkbox checkbox-info"
                             checked={healthConfig[key as keyof HealthDataConfig]}
                             onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
                           />
-                        </label>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -469,44 +562,192 @@ export function AdminPage() {
               </div>
 
               {/* Workouts/Training */}
-              <div className="card bg-base-200">
-                <div className="card-body">
-                  <h3 className="card-title text-lg">
-                    <Activity size={20} />
-                    Träningspass
-                  </h3>
-                  <div className="space-y-3">
-                    <label className="cursor-pointer label">
-                      <span className="label-text text-sm">Träningspass från Withings</span>
-                      <input
-                        type="checkbox"
-                        className="checkbox checkbox-primary checkbox-sm"
-                        checked={healthConfig.workouts}
-                        onChange={(e) => handleHealthConfigChange('workouts', e.target.checked)}
-                      />
-                    </label>
+              <div className="card bg-gradient-to-br from-warning/5 to-warning/10 border border-warning/20 shadow-lg hover:shadow-xl transition-shadow lg:col-span-2 xl:col-span-3">
+                <div className="card-body p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="card-title text-xl text-warning">
+                      <div className="p-2 bg-warning/10 rounded-lg">
+                        <Activity size={24} />
+                      </div>
+                      Träningspass & Workouts
+                    </h3>
+                    <div className="badge badge-warning badge-lg">
+                      {healthConfig.workouts ? 'Aktiverad' : 'Inaktiverad'}
+                    </div>
                   </div>
-                  <div className="text-xs text-base-content/60 mt-2">
-                    Inkluderar alla träningspass registrerade i Withings-appen eller synkroniserade från andra appar.
+                  
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-sm text-base-content/70 mb-4">
+                        Aktivera för att visa alla träningspass och workouts från Withings-appen eller synkroniserade från andra fitness-appar.
+                      </p>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-4 bg-base-100/50 rounded-lg">
+                          <div className="flex-1">
+                            <div className="font-medium">Träningspass från Withings</div>
+                            <div className="text-xs text-base-content/60 mt-1">
+                              Inkluderar alla registrerade träningsaktiviteter med tid, kalorier och träningstyp
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-warning checkbox-lg"
+                            checked={healthConfig.workouts}
+                            onChange={(e) => handleHealthConfigChange('workouts', e.target.checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-base-100/30 rounded-lg p-4">
+                      <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                        <div className="badge badge-ghost badge-sm">Demo</div>
+                        Exempel på träningsdata
+                      </h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between items-center p-2 bg-warning/10 rounded">
+                          <span>🏃‍♂️ Löpning</span>
+                          <span>45min • 420 kcal</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-warning/10 rounded">
+                          <span>💪 Styrketräning</span>
+                          <span>60min • 280 kcal</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-warning/10 rounded">
+                          <span>🚴‍♀️ Cykling</span>
+                          <span>90min • 650 kcal</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Preview */}
-              <div className="card bg-primary/5 border border-primary/20">
-                <div className="card-body">
-                  <h3 className="card-title">👀 Förhandsgranskning</h3>
-                  <p className="text-sm">
-                    Dessa data kommer att visas i din hälsodata-modul baserat på dina val ovan:
-                  </p>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {Object.entries(healthConfig)
-                      .filter(([_, enabled]) => enabled)
-                      .map(([key, _]) => (
-                        <div key={key} className="badge badge-primary">
-                          {key}
+              {/* Live Preview */}
+              <div className="divider mt-8">
+                <span className="text-base-content/60">Live Förhandsgranskning</span>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-8">
+                {/* Preview Card */}
+                <div className="card bg-gradient-to-br from-success/5 to-success/10 border border-success/20 shadow-lg">
+                  <div className="card-body p-6">
+                    <h3 className="card-title text-success text-xl mb-4">
+                      <div className="p-2 bg-success/10 rounded-lg">
+                        📱
+                      </div>
+                      Kalender Förhandsgranskning
+                    </h3>
+                    <p className="text-sm text-base-content/70 mb-4">
+                      Se hur din hälsodata kommer att visas i kalendern
+                    </p>
+                    
+                    {/* Mock Calendar Day */}
+                    <div className="bg-base-100 border border-red-200/50 rounded-lg p-3">
+                      <div className="text-xs font-bold text-center text-red-600 mb-2 border-b border-red-200/50 pb-1">
+                        Måndag 14/8
+                      </div>
+                      <div className="space-y-1">
+                        {Object.entries(healthConfig)
+                          .filter(([_, enabled]) => enabled)
+                          .slice(0, 8) // Limit to first 8 to avoid overflow
+                          .map(([key, _]) => {
+                            const mockValues: Record<string, string> = {
+                              weight: '75.2kg',
+                              steps: '8,432',
+                              calories: '2,180',
+                              restingHeartRate: '68bpm',
+                              sleepDuration: '7.5h',
+                              distance: '6.2km',
+                              workouts: '💪 Gym 45min',
+                              bmi: '23.1'
+                            };
+                            const icons: Record<string, string> = {
+                              weight: '⚖️',
+                              steps: '👣',
+                              calories: '🔥',
+                              restingHeartRate: '❤️',
+                              sleepDuration: '😴',
+                              distance: '📏',
+                              workouts: '💪',
+                              bmi: '📊'
+                            };
+                            return (
+                              <div key={key} className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-1">
+                                  <span>{icons[key] || '📊'}</span>
+                                  <span className="text-base-content/70 capitalize">{key}</span>
+                                </div>
+                                <span className="font-semibold text-red-600">
+                                  {mockValues[key] || '---'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        {Object.values(healthConfig).filter(Boolean).length === 0 && (
+                          <div className="text-center py-4 text-xs text-base-content/50">
+                            Inga mätvärden valda
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Settings Summary */}
+                <div className="card bg-gradient-to-br from-neutral/5 to-neutral/10 border border-neutral/20 shadow-lg">
+                  <div className="card-body p-6">
+                    <h3 className="card-title text-neutral-content text-xl mb-4">
+                      <div className="p-2 bg-neutral/10 rounded-lg">
+                        📋
+                      </div>
+                      Konfigurationssammanfattning
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="stats stats-vertical shadow-sm">
+                        <div className="stat py-2">
+                          <div className="stat-title text-xs">Totalt aktiverat</div>
+                          <div className="stat-value text-lg">{Object.values(healthConfig).filter(Boolean).length}</div>
+                          <div className="stat-desc text-xs">av {Object.keys(healthConfig).length} tillgängliga</div>
                         </div>
-                      ))}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: 'Kroppsmått', keys: ['weight', 'fatMass', 'muscleMass', 'bmi', 'basalMetabolicRate'], color: 'badge-secondary' },
+                          { label: 'Aktivitet', keys: ['steps', 'distance', 'calories', 'activeMinutes', 'vo2Max'], color: 'badge-primary' },
+                          { label: 'Hjärta', keys: ['restingHeartRate', 'continuousHeartRate', 'heartRateVariability', 'systolicBP', 'diastolicBP'], color: 'badge-accent' },
+                          { label: 'Sömn', keys: ['sleepDuration', 'sleepEfficiency', 'deepSleep', 'lightSleep', 'remSleep', 'sleepScore'], color: 'badge-info' }
+                        ].map(({ label, keys, color }) => (
+                          <div key={label} className="text-center">
+                            <div className={`badge ${color} badge-sm w-full`}>
+                              {label}
+                            </div>
+                            <div className="text-lg font-bold mt-1">
+                              {keys.filter(key => healthConfig[key as keyof HealthDataConfig]).length}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm">Aktiva mätvärden:</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(healthConfig)
+                            .filter(([_, enabled]) => enabled)
+                            .map(([key, _]) => (
+                              <div key={key} className="badge badge-outline badge-xs">
+                                {key}
+                              </div>
+                            ))}
+                          {Object.values(healthConfig).filter(Boolean).length === 0 && (
+                            <div className="text-xs text-base-content/50 italic">
+                              Inga mätvärden aktiverade
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

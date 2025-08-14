@@ -199,7 +199,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
             <>
               {renderMetricItem('steps', 'Steg', withingsData.activity.steps, <Footprints size={10} className="text-red-600" />)}
               {renderMetricItem('distance', 'Distans', (withingsData.activity.distance / 1000).toFixed(1), <Activity size={10} className="text-red-600" />, 'km')}
-              {renderMetricItem('calories', 'Kalorier', withingsData.activity.calories, <Flame size={10} className="text-red-600" />)}
+              {renderMetricItem('calories', 'Kalorier', Math.round(withingsData.activity.calories), <Flame size={10} className="text-red-600" />)}
               {renderMetricItem('activeMinutes', 'Aktiva min', withingsData.activity.moderate + withingsData.activity.intense, <Clock size={10} className="text-red-600" />, 'min')}
             </>
           )}
@@ -273,7 +273,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                       <Clock size={6} />{Math.round(workout.duration / 60)}m
                     </span>
                     <span className="flex items-center gap-0.5">
-                      <Flame size={6} />{workout.calories || 0}cal
+                      <Flame size={6} />{Math.round(workout.calories || 0)}cal
                     </span>
                   </div>
                 </div>
