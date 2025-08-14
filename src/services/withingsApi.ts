@@ -404,12 +404,40 @@ export class WithingsApiService {
       
       // Convert series to workout format - filter for actual workout categories
       const workoutCategories = [
-        1,   // Walking  
-        2,   // Running
-        16,  // Weight training 
-        17,  // Cycling
-        36,  // Other
-        // Add more categories as needed
+        1,   // Promenad
+        2,   // Löpning
+        3,   // Simning
+        8,   // Tennis
+        9,   // Pingis
+        10,  // Squash
+        11,  // Badminton
+        12,  // Padel
+        13,  // Hockey
+        14,  // Fotboll
+        15,  // Basketball
+        16,  // Styrketräning
+        17,  // Cykling
+        18,  // Elliptical
+        19,  // Rodd
+        20,  // Skidor
+        21,  // Alpint
+        22,  // Snowboard
+        23,  // Skridskor
+        24,  // Multisport
+        25,  // Yoga
+        26,  // Pilates
+        27,  // Dans
+        28,  // Boxning
+        29,  // Fäktning
+        30,  // Wrestling
+        31,  // Kampsport
+        32,  // Rock climbing
+        33,  // Skidåkning
+        34,  // Rullskridskor
+        35,  // Golf
+        36,  // Annan träning
+        187, // Muskelträning
+        188  // Konditionsträning
       ];
       
       const processedWorkouts = seriesWorkouts
@@ -475,10 +503,42 @@ export class WithingsApiService {
     const categories: Record<number, string> = {
       1: 'Promenad',
       2: 'Löpning', 
+      3: 'Simning',
+      4: 'Surfing',
+      5: 'Kitesurfing',
+      6: 'Windsurfing',
+      7: 'Bodyboard',
+      8: 'Tennis',
+      9: 'Pingis',
+      10: 'Squash',
+      11: 'Badminton',
+      12: 'Padel',
+      13: 'Hockey',
+      14: 'Fotboll',
+      15: 'Basketball',
       16: 'Styrketräning',
       17: 'Cykling',
+      18: 'Elliptical',
+      19: 'Rodd',
+      20: 'Skidor',
+      21: 'Alpint',
+      22: 'Snowboard',
+      23: 'Skridskor',
+      24: 'Multisport',
+      25: 'Yoga',
+      26: 'Pilates',
+      27: 'Dans',
+      28: 'Boxning',
+      29: 'Fäktning',
+      30: 'Wrestling',
+      31: 'Kampsport',
+      32: 'Rock climbing',
+      33: 'Skidåkning',
+      34: 'Rullskridskor',
+      35: 'Golf',
       36: 'Annan träning',
-      // Add more as we discover them
+      187: 'Muskelträning',
+      188: 'Konditionsträning'
     };
     return categories[category] || `Träning (${category})`;
   }
