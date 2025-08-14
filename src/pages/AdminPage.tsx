@@ -157,7 +157,7 @@ export function AdminPage() {
     authUrl.searchParams.append('response_type', 'code');
     authUrl.searchParams.append('client_id', withingsConfig.clientId);
     authUrl.searchParams.append('redirect_uri', withingsConfig.redirectUri);
-    authUrl.searchParams.append('scope', 'user.metrics,user.activity,user.sleepevents');
+    authUrl.searchParams.append('scope', 'user.info,user.metrics,user.activity,user.sleepevents');
     authUrl.searchParams.append('state', 'lifecalendar-auth');
     
     // Redirect to Withings OAuth (full page redirect instead of popup)

@@ -283,7 +283,7 @@ export class WithingsApiService {
   }
 
   /**
-   * Get workouts data
+   * Get workouts data using correct Withings API
    */
   async getWorkouts(
     startDate?: Date,
@@ -293,133 +293,51 @@ export class WithingsApiService {
       throw new Error('No access token available');
     }
 
+    // Use the official Withings getworkouts API endpoint
     const params = new URLSearchParams({
       action: 'getworkouts',
       access_token: this.config.accessToken,
     });
 
-    // Try different date formats and expand date range
+    // Add date parameters if provided (using startdateymd/enddateymd format)
     if (startDate) {
-      // Expand date range to get more data - go back 7 days
-      const expandedStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      params.append('startdateymd', expandedStartDate.toISOString().split('T')[0]);
+      params.append('startdateymd', startDate.toISOString().split('T')[0]);
     }
     if (endDate) {
-      // Expand date range to get more data - go forward 7 days  
-      const expandedEndDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-      params.append('enddateymd', expandedEndDate.toISOString().split('T')[0]);
+      params.append('enddateymd', endDate.toISOString().split('T')[0]);
     }
 
-    console.log('Fetching workouts with params:', {
-      startDate: startDate?.toISOString().split('T')[0],
-      endDate: endDate?.toISOString().split('T')[0],
-      url: `${this.baseUrl}/measure?${params}`
+    console.log('Calling Withings getworkouts API:', {
+      url: `${this.baseUrl}/measure?${params.toString()}`,
+      params: Object.fromEntries(params.entries())
     });
 
-    // Try the v2/measure endpoint first, if that fails try other endpoints
-    let response = await fetch(`${this.baseUrl}/measure?${params}`);
-    let data = await response.json();
-    
-    console.log('First attempt - /measure response:', data);
-    
-    // If no workouts found or error, try different approaches
-    if (data.status !== 0 || !data.body.workouts || data.body.workouts.length === 0) {
-      console.log('Trying alternative endpoint: /sport');
-      const response2 = await fetch(`${this.baseUrl}/sport?${params}`);
-      const data2 = await response2.json();
-      console.log('Alternative endpoint /sport response:', data2);
-      
-      if (data2.status === 0 && data2.body) {
-        data = data2;
-      }
-      
-      // Try using Unix timestamps instead of YMD format
-      if (!data.body.workouts || data.body.workouts.length === 0) {
-        console.log('Trying with Unix timestamps');
-        const paramsUnix = new URLSearchParams({
-          action: 'getworkouts',
-          access_token: this.config.accessToken,
-        });
-        
-        if (startDate) {
-          const expandedStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-          paramsUnix.append('startdate', Math.floor(expandedStartDate.getTime() / 1000).toString());
+    try {
+      const response = await fetch(`${this.baseUrl}/measure?${params}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'LifeCalendar/1.0'
         }
-        if (endDate) {
-          const expandedEndDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-          paramsUnix.append('enddate', Math.floor(expandedEndDate.getTime() / 1000).toString());
-        }
-        
-        console.log('Trying Unix timestamp params:', paramsUnix.toString());
-        const response3 = await fetch(`${this.baseUrl}/measure?${paramsUnix}`);
-        const data3 = await response3.json();
-        console.log('Unix timestamp response:', data3);
-        
-        if (data3.status === 0 && data3.body && data3.body.workouts) {
-          data = data3;
-        }
-        
-        // Last resort: try without any date parameters
-        if (!data.body.workouts || data.body.workouts.length === 0) {
-          console.log('Trying without date parameters');
-          const paramsNoDate = new URLSearchParams({
-            action: 'getworkouts',
-            access_token: this.config.accessToken,
-          });
-          
-          console.log('No date params:', paramsNoDate.toString());
-          const response4 = await fetch(`${this.baseUrl}/measure?${paramsNoDate}`);
-          const data4 = await response4.json();
-          console.log('No date response:', data4);
-          
-          if (data4.status === 0 && data4.body && data4.body.workouts) {
-            data = data4;
-          }
-          
-          // Try getactivity instead - workouts might be part of activity data
-          if (!data.body.workouts || data.body.workouts.length === 0) {
-            console.log('Trying getactivity API for workout data');
-            const activityParams = new URLSearchParams({
-              action: 'getactivity',
-              access_token: this.config.accessToken,
-            });
-            
-            if (startDate) {
-              const expandedStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-              activityParams.append('startdateymd', expandedStartDate.toISOString().split('T')[0]);
-            }
-            if (endDate) {
-              const expandedEndDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-              activityParams.append('enddateymd', expandedEndDate.toISOString().split('T')[0]);
-            }
-            
-            console.log('Activity API params:', activityParams.toString());
-            const activityResponse = await fetch(`${this.baseUrl}/measure?${activityParams}`);
-            const activityData = await activityResponse.json();
-            console.log('Activity API response:', activityData);
-            
-            // Check if activity data contains workout information
-            if (activityData.status === 0 && activityData.body && activityData.body.activities) {
-              console.log('Found activity data, checking for workouts...');
-              // Use activity data as fallback
-              data = { ...data, body: { ...data.body, activities: activityData.body.activities } };
-            }
-          }
-        }
-      }
-    }
-    
-    console.log('Withings workouts API response:', data);
-    
-    if (data.status !== 0) {
-      console.error('Withings API Error:', data.error);
-      throw new Error(`Withings API Error: ${data.error}`);
-    }
+      });
 
-    const workouts = data.body.workouts || [];
-    console.log('Processed workouts:', workouts);
-    
-    return workouts;
+      const data = await response.json();
+      console.log('Withings getworkouts response:', data);
+
+      if (data.status !== 0) {
+        console.error('Withings API Error:', data.error);
+        // Don't throw error, just return empty array
+        return [];
+      }
+
+      const workouts = data.body?.workouts || [];
+      console.log('Extracted workouts:', workouts);
+      
+      return workouts;
+    } catch (error) {
+      console.error('Network error calling Withings API:', error);
+      return [];
+    }
   }
 
   /**
@@ -511,57 +429,15 @@ export class WithingsHealthDataAggregator {
         healthData.sleep = sleepData[0] || null;
       }
 
-      // Get workouts if enabled - check both dedicated workout API and activity data
+      // Get workouts if enabled - use official Withings workout API
       if (enabledMetrics.includes('workouts')) {
         console.log('Fetching workouts for date:', date.toISOString().split('T')[0]);
         
-        // First try the dedicated workout API
+        // Use the official Withings workout API
         const workouts = await this.api.getWorkouts(date, date);
-        console.log('Fetched workouts from workout API:', workouts);
+        console.log('Fetched workouts:', workouts);
         
-        // If no workouts from dedicated API, try intraday activity data for specific workout sessions
-        if (!workouts || workouts.length === 0) {
-          console.log('No workouts from dedicated API, checking intraday activity data...');
-          
-          try {
-            // Get intraday activity data with heart rate and steps to identify workout periods
-            const intradayData = await this.api.getIntradayActivity(date, ['steps', 'heart_rate', 'calories']);
-            console.log('Intraday activity data:', intradayData);
-            
-            // Analyze intraday data to find workout sessions (high heart rate periods, step bursts)
-            const workoutSessions = this.extractWorkoutSessionsFromIntraday(intradayData, date);
-            console.log('Extracted workout sessions from intraday:', workoutSessions);
-            
-            if (workoutSessions.length > 0) {
-              healthData.workouts = workoutSessions;
-            } else {
-              // Fallback to daily activity data but with better logic
-              const activities = await this.api.getActivityData(date, date);
-              console.log('Fallback to daily activity data:', activities);
-              
-              // Only create workout if there's significant intense activity
-              const workoutActivities = activities.filter((activity: any) => {
-                return activity.intense && activity.intense > 10; // At least 10 minutes intense
-              }).map((activity: any) => ({
-                id: `activity-workout-${activity.date}`,
-                category: 'Träning',
-                duration: activity.intense || 0, // Only intense minutes
-                calories: Math.round((activity.calories || 0) * (activity.intense || 0) / ((activity.soft || 0) + (activity.moderate || 0) + (activity.intense || 0))), // Estimate calories for intense portion
-                startdate: Math.floor(new Date(activity.date + 'T12:00:00').getTime() / 1000), // Assume midday
-                enddate: Math.floor(new Date(activity.date + 'T12:00:00').getTime() / 1000) + (activity.intense || 0) * 60,
-                source: 'activity'
-              }));
-              
-              console.log('Fallback workout activities:', workoutActivities);
-              healthData.workouts = workoutActivities;
-            }
-          } catch (error) {
-            console.error('Error getting intraday data:', error);
-            healthData.workouts = [];
-          }
-        } else {
-          healthData.workouts = workouts;
-        }
+        healthData.workouts = workouts;
       }
 
       return healthData;
@@ -599,92 +475,4 @@ export class WithingsHealthDataAggregator {
     return processed;
   }
 
-  private extractWorkoutSessionsFromIntraday(intradayData: any, date: Date): any[] {
-    if (!intradayData || !intradayData.steps) {
-      return [];
-    }
-
-    const workoutSessions: any[] = [];
-    const stepData = intradayData.steps || {};
-    const heartRateData = intradayData.heart_rate || {};
-    
-    // Convert step data to time series
-    const timeEntries = Object.entries(stepData).map(([timestamp, steps]) => ({
-      timestamp: parseInt(timestamp),
-      steps: steps as number,
-      heartRate: heartRateData[timestamp] as number || 0
-    })).sort((a, b) => a.timestamp - b.timestamp);
-
-    console.log('Time series data for workout detection:', timeEntries.slice(0, 10)); // Log first 10 entries
-
-    // Find periods of high activity (workout sessions)
-    let sessionStart: number | null = null;
-    let sessionSteps = 0;
-    let sessionMaxHeartRate = 0;
-    let sessionDuration = 0;
-
-    for (let i = 0; i < timeEntries.length; i++) {
-      const entry = timeEntries[i];
-      const isHighActivity = entry.steps > 50 || entry.heartRate > 100; // Threshold for workout activity
-
-      if (isHighActivity && sessionStart === null) {
-        // Start of new session
-        sessionStart = entry.timestamp;
-        sessionSteps = entry.steps;
-        sessionMaxHeartRate = entry.heartRate;
-        sessionDuration = 60; // 1 minute
-      } else if (isHighActivity && sessionStart !== null) {
-        // Continue session
-        sessionSteps += entry.steps;
-        sessionMaxHeartRate = Math.max(sessionMaxHeartRate, entry.heartRate);
-        sessionDuration += 60; // Add 1 minute
-      } else if (!isHighActivity && sessionStart !== null && sessionDuration >= 15 * 60) {
-        // End of session (at least 15 minutes)
-        const estimatedCalories = Math.round(sessionSteps * 0.04 + sessionMaxHeartRate * 0.5); // Rough estimate
-        
-        workoutSessions.push({
-          id: `intraday-workout-${sessionStart}`,
-          category: sessionMaxHeartRate > 140 ? 'Intensiv träning' : 'Måttlig träning',
-          duration: Math.round(sessionDuration / 60), // Convert to minutes
-          calories: estimatedCalories,
-          startdate: sessionStart,
-          enddate: sessionStart + sessionDuration,
-          source: 'intraday',
-          maxHeartRate: sessionMaxHeartRate,
-          totalSteps: sessionSteps
-        });
-
-        // Reset for next session
-        sessionStart = null;
-        sessionSteps = 0;
-        sessionMaxHeartRate = 0;
-        sessionDuration = 0;
-      } else if (!isHighActivity && sessionStart !== null) {
-        // Gap in activity but session too short, reset
-        sessionStart = null;
-        sessionSteps = 0;
-        sessionMaxHeartRate = 0;
-        sessionDuration = 0;
-      }
-    }
-
-    // Handle session that goes to end of data
-    if (sessionStart !== null && sessionDuration >= 15 * 60) {
-      const estimatedCalories = Math.round(sessionSteps * 0.04 + sessionMaxHeartRate * 0.5);
-      
-      workoutSessions.push({
-        id: `intraday-workout-${sessionStart}`,
-        category: sessionMaxHeartRate > 140 ? 'Intensiv träning' : 'Måttlig träning',
-        duration: Math.round(sessionDuration / 60),
-        calories: estimatedCalories,
-        startdate: sessionStart,
-        enddate: sessionStart + sessionDuration,
-        source: 'intraday',
-        maxHeartRate: sessionMaxHeartRate,
-        totalSteps: sessionSteps
-      });
-    }
-
-    return workoutSessions;
-  }
 }
