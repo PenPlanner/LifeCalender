@@ -141,38 +141,10 @@ export function AdminPage() {
       return;
     }
     
-    // Check if we're running locally
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    if (isLocalhost) {
-      // For local development, simulate successful connection
-      const useDemo = confirm(
-        'Du kör lokalt. Vill du:\n\n' +
-        '✅ OK = Använd demo-data (rekommenderat för utveckling)\n' +
-        '❌ Avbryt = Konfigurera riktig OAuth med ngrok\n\n' +
-        'För riktig OAuth lokalt, använd ngrok:\n' +
-        '1. npm install -g ngrok\n' +
-        '2. ngrok http 5173\n' +
-        '3. Uppdatera Redirect URI med ngrok-URL'
-      );
-      
-      if (useDemo) {
-        setConnectionStatus('connected');
-        setWithingsConfig(prev => ({ 
-          ...prev, 
-          isConnected: true,
-          accessToken: 'demo-token',
-          userId: 'demo-user'
-        }));
-        alert('Demo-läge aktiverat! 🎉\nHälsodata kommer från mock-data.');
-        return;
-      } else {
-        alert('Konfigurera ngrok och uppdatera Redirect URI för riktig OAuth.');
-        return;
-      }
-    }
-    
     setConnectionStatus('connecting');
+    
+    // Save current config before OAuth
+    localStorage.setItem('withings-config', JSON.stringify(withingsConfig));
     
     // OAuth 2.0 flow URL for Withings
     const authUrl = new URL('https://account.withings.com/oauth2_user/authorize2');
@@ -182,21 +154,8 @@ export function AdminPage() {
     authUrl.searchParams.append('scope', 'user.metrics,user.activity,user.sleepevents');
     authUrl.searchParams.append('state', 'lifecalendar-auth');
     
-    // Open OAuth popup
-    const popup = window.open(
-      authUrl.toString(),
-      'withings-auth',
-      'width=600,height=700,scrollbars=yes,resizable=yes'
-    );
-    
-    // Listen for OAuth callback
-    const checkClosed = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(checkClosed);
-        setConnectionStatus('connected');
-        setWithingsConfig(prev => ({ ...prev, isConnected: true }));
-      }
-    }, 1000);
+    // Redirect to Withings OAuth (full page redirect instead of popup)
+    window.location.href = authUrl.toString();
   };
 
   const disconnectFromWithings = () => {

@@ -37,16 +37,14 @@ export function WithingsCallback() {
 
         const config = JSON.parse(configStr);
         
-        // Create API instance
-        const api = createWithingsApiFromConfig();
-        if (!api) {
-          setStatus('error');
-          setMessage('Kunde inte skapa Withings API-instans');
-          return;
-        }
+        // Create API instance manually since we don't have tokens yet
+        const { WithingsApiService } = await import('../services/withingsApi');
+        const api = new WithingsApiService(config);
 
-        // Exchange code for tokens
+        // Exchange code for tokens  
+        console.log('Exchanging code for tokens...', { code, redirectUri: config.redirectUri });
         const tokenData = await api.exchangeCodeForToken(code, config.redirectUri);
+        console.log('Token exchange successful:', tokenData);
         
         // Update config with tokens
         const updatedConfig = {
