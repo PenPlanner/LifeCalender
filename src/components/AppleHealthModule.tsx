@@ -316,21 +316,34 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           <div className="border-t border-red-200/50 pt-1">
             <div className="space-y-0.5">
               {/* Withings Workouts */}
-              {withingsData?.workouts?.map((workout: any) => (
-                <div key={`withings-${workout.id}`} className="bg-red-100/30 border border-red-200/50 rounded p-0.5">
-                  <div className="text-[10px] font-semibold text-red-700 mb-0.5">
-                    {workout.category || 'Träning'}
+              {withingsData?.workouts?.map((workout: any) => {
+                // Check if this workout type should show distance
+                const showDistance = workout.category && [
+                  'Promenad', 'Löpning', 'Cykling', 'Simning', 'Rodd', 'Skidor', 'Alpint', 
+                  'Snowboard', 'Skridskor', 'Skidåkning', 'Rullskridskor'
+                ].includes(workout.category);
+                
+                return (
+                  <div key={`withings-${workout.id}`} className="bg-red-100/30 border border-red-200/50 rounded p-0.5">
+                    <div className="text-[10px] font-semibold text-red-700 mb-0.5">
+                      {workout.category || 'Träning'}
+                    </div>
+                    <div className="flex gap-1 text-[10px] text-red-600/80">
+                      <span className="flex items-center gap-0.5">
+                        <Clock size={6} />{workout.duration || 0}m
+                      </span>
+                      <span className="flex items-center gap-0.5">
+                        <Flame size={6} />{Math.round(workout.calories || 0)}cal
+                      </span>
+                      {showDistance && workout.distance > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <Activity size={6} />{workout.distance}km
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-1 text-[10px] text-red-600/80">
-                    <span className="flex items-center gap-0.5">
-                      <Clock size={6} />{workout.duration || 0}m
-                    </span>
-                    <span className="flex items-center gap-0.5">
-                      <Flame size={6} />{Math.round(workout.calories || 0)}cal
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               
               {/* Apple Health Workouts */}
               {workouts.map((workout) => (
