@@ -312,11 +312,11 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
 
 
         {/* Workouts - Withings and Apple Health combined */}
-        {healthConfig?.workouts && ((withingsData?.workouts && withingsData.workouts.length > 0) || workouts.length > 0) && (
+        {healthConfig?.workouts && ((withingsData?.workouts && withingsData.workouts.filter((w: any) => (w.duration || 0) >= 3).length > 0) || workouts.length > 0) && (
           <div className="border-t border-red-200/50 pt-1">
             <div className="space-y-0.5">
               {/* Withings Workouts */}
-              {withingsData?.workouts?.map((workout: any) => {
+              {withingsData?.workouts?.filter((workout: any) => (workout.duration || 0) >= 3).map((workout: any) => {
                 // Check if this workout type should show distance
                 const showDistance = workout.category && [
                   'Promenad', 'Löpning', 'Cykling', 'Simning', 'Rodd', 'Skidor', 'Alpint', 
@@ -370,7 +370,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           </div>
         )}
 
-        {healthConfig?.workouts && (!withingsData?.workouts || withingsData.workouts.length === 0) && workouts.length === 0 && !isLoading && (
+        {healthConfig?.workouts && (!withingsData?.workouts || withingsData.workouts.filter((w: any) => (w.duration || 0) >= 3).length === 0) && workouts.length === 0 && !isLoading && (
           <div className="border-t border-red-200/50 pt-2">
             <div className="text-center text-xs text-red-500/70">
               😴 Vilodag
