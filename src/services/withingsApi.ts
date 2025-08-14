@@ -305,14 +305,41 @@ export class WithingsApiService {
       params.append('enddateymd', endDate.toISOString().split('T')[0]);
     }
 
-    const response = await fetch(`${this.baseUrl}/measure?${params}`);
-    const data = await response.json();
+    console.log('Fetching workouts with params:', {
+      startDate: startDate?.toISOString().split('T')[0],
+      endDate: endDate?.toISOString().split('T')[0],
+      url: `${this.baseUrl}/measure?${params}`
+    });
+
+    // Try the v2/measure endpoint first, if that fails try other endpoints
+    let response = await fetch(`${this.baseUrl}/measure?${params}`);
+    let data = await response.json();
+    
+    console.log('First attempt - /measure response:', data);
+    
+    // If no workouts found or error, try different endpoint
+    if (data.status !== 0 || !data.body.workouts || data.body.workouts.length === 0) {
+      console.log('Trying alternative endpoint: /sport');
+      const response2 = await fetch(`${this.baseUrl}/sport?${params}`);
+      const data2 = await response2.json();
+      console.log('Alternative endpoint /sport response:', data2);
+      
+      if (data2.status === 0 && data2.body) {
+        data = data2;
+      }
+    }
+    
+    console.log('Withings workouts API response:', data);
     
     if (data.status !== 0) {
+      console.error('Withings API Error:', data.error);
       throw new Error(`Withings API Error: ${data.error}`);
     }
 
-    return data.body.workouts || [];
+    const workouts = data.body.workouts || [];
+    console.log('Processed workouts:', workouts);
+    
+    return workouts;
   }
 
   /**
@@ -406,7 +433,9 @@ export class WithingsHealthDataAggregator {
 
       // Get workouts if enabled
       if (enabledMetrics.includes('workouts')) {
+        console.log('Fetching workouts for date:', date.toISOString().split('T')[0]);
         const workouts = await this.api.getWorkouts(date, date);
+        console.log('Fetched workouts:', workouts);
         healthData.workouts = workouts;
       }
 

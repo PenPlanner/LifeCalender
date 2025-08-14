@@ -136,7 +136,9 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           .map(([key, _]) => key);
         
         if (enabledMetrics.length > 0) {
+          console.log('Fetching health data for date:', dayData.date, 'with enabled metrics:', enabledMetrics);
           const data = await aggregator.getHealthDataForDate(new Date(dayData.date), enabledMetrics);
+          console.log('Received health data:', data);
           setWithingsData(data);
         }
       } catch (error) {
