@@ -23,26 +23,25 @@ export function Layout({ children }: LayoutProps) {
         </div>
         
         <div className="navbar-center">
-          <ul className="menu menu-horizontal p-0 gap-1">
-            <li>
-              <Link
-                to="/"
-                className={`btn btn-xs ${location.pathname === '/' ? 'btn-primary' : 'btn-ghost'} gap-1`}
-              >
-                <Calendar size={12} />
-                Kalender
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/admin"
-                className={`btn btn-xs ${location.pathname === '/admin' ? 'btn-primary' : 'btn-ghost'} gap-1`}
-              >
-                <Settings size={12} />
-                Admin
-              </Link>
-            </li>
-          </ul>
+          <div className="flex gap-1">
+            <Link
+              to="/"
+              className={`btn btn-xs ${location.pathname === '/' ? 'btn-primary' : 'btn-ghost'} gap-1`}
+            >
+              <Calendar size={12} />
+              Kalender
+            </Link>
+            <Link
+              to="/admin"
+              className={`btn btn-xs ${location.pathname === '/admin' ? 'btn-primary' : 'btn-ghost'} gap-1`}
+              onClick={(e) => {
+                console.log('Admin link clicked', e);
+              }}
+            >
+              <Settings size={12} />
+              Admin
+            </Link>
+          </div>
         </div>
         
         <div className="navbar-end gap-1">
