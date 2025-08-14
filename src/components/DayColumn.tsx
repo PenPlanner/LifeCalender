@@ -51,11 +51,11 @@ export function DayColumn({
         {/* Apple Health Data Section - Always same height based on week's max */}
         <div style={{ minHeight: `${maxHealthModuleHeight}px` }} className="bg-gradient-to-br from-red-50/50 to-orange-50/50 border border-red-200/30 rounded p-1">
           <div className="text-xs font-semibold text-base-content/70 mb-1">🏥 Hälsodata</div>
-          {dayData.metrics && settings.modules_enabled.withings ? (
+          {settings.modules_enabled.withings ? (
             <AppleHealthModule dayData={dayData} />
           ) : (
             <div className="flex items-center justify-center" style={{ minHeight: `${maxHealthModuleHeight - 30}px` }}>
-              <span className="text-xs text-base-content/50">Ingen hälsodata</span>
+              <span className="text-xs text-base-content/50">Hälsodata inaktiverad</span>
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { Activity, Heart, Footprints, Clock, Flame, Scale, Moon, Droplets } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import type { DayData } from '../types';
 import { createWithingsApiFromConfig, WithingsHealthDataAggregator } from '../services/withingsApi';
 
@@ -209,58 +210,33 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
         </div>
       )}
 
-      {/* Fallback to original metrics if no Withings data */}
-      {!withingsData && !isLoading && (
-        <div className="space-y-0.5">
-          {(!healthConfig || healthConfig.steps) && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <Footprints size={10} className="text-red-600" />
-                <span className="text-xs text-base-content/70">Steg</span>
-              </div>
-              <span className="text-xs font-semibold text-red-600">
-                {metrics?.steps?.toLocaleString() || '0'}
-              </span>
-            </div>
-          )}
-          
-          {(!healthConfig || healthConfig.activeMinutes) && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <Activity size={10} className="text-red-600" />
-                <span className="text-xs text-base-content/70">Cardio</span>
-              </div>
-              <span className="text-xs font-semibold text-red-600">
-                {metrics?.cardio_minutes || 0}min
-              </span>
-            </div>
-          )}
-          
-          {(!healthConfig || healthConfig.calories) && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <Heart size={10} className="text-red-600" />
-                <span className="text-xs text-base-content/70">Kcal</span>
-              </div>
-              <span className="text-xs font-semibold text-red-600">
-                {metrics?.calories_out || 0}
-              </span>
-            </div>
-          )}
+      {/* Show empty state if no Withings data and no config */}
+      {!withingsData && !isLoading && !healthConfig && (
+        <div className="text-center py-4">
+          <div className="text-xs text-base-content/50 mb-2">
+            Ingen hälsodata tillgänglig
+          </div>
+          <div className="text-xs text-base-content/50 mb-2">
+            Konfigurera Withings för hälsodata
+          </div>
+          <Link to="/admin" className="link link-primary text-xs">
+            Gå till Admin →
+          </Link>
         </div>
       )}
 
-      {/* Show config link if no Withings data and no config */}
-      {!withingsData && !isLoading && !healthConfig && (
-        <div className="text-center py-2">
-          <div className="text-xs text-base-content/50 mb-1">
-            Konfigurera Withings för hälsodata
+      {/* Show empty state if no Withings data but config exists */}
+      {!withingsData && !isLoading && healthConfig && (
+        <div className="text-center py-4">
+          <div className="text-xs text-base-content/50 mb-2">
+            Ingen Withings-data hittad
           </div>
-          <a href="/admin" className="link link-primary text-xs">
-            Gå till Admin →
-          </a>
+          <div className="text-xs text-base-content/50">
+            Kontrollera din anslutning i admin
+          </div>
         </div>
       )}
+
 
         {/* Workouts - Withings and Apple Health combined */}
         {((withingsData?.workouts && withingsData.workouts.length > 0) || workouts.length > 0) && (

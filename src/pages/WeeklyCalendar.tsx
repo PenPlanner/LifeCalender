@@ -30,36 +30,10 @@ const mockSettings: Settings = {
 };
 
 const mockDayData = (date: string): DayData => {
-  // Create consistent demo data based on date to avoid constant re-rendering
-  const dateHash = date.split('-').reduce((acc, part) => acc + parseInt(part), 0);
-  const dayIndex = new Date(date).getDay();
-  
   return {
     date,
-    metrics: {
-      steps: 7500 + (dateHash % 5000),
-      cardio_minutes: 20 + (dateHash % 40),
-      calories_out: 2200 + (dateHash % 800),
-    },
-    workouts: dayIndex === 0 || dayIndex === 6 ? [] : [
-      {
-        id: `workout-${date}`,
-        ...(() => {
-          const workouts = [
-            { name: 'Löpning', type: 'Cardio' },
-            { name: 'Styrketräning', type: 'Styrka' },
-            { name: 'Cykling', type: 'Cardio' },
-            { name: 'Yoga', type: 'Flexibilitet' },
-            { name: 'HIIT', type: 'Cardio' },
-            { name: 'Bänkpress', type: 'Styrka' }
-          ];
-          return workouts[dateHash % workouts.length];
-        })(),
-        duration: 45 + (dateHash % 30),
-        calories: 300 + (dateHash % 200),
-        start_time: `${date}T07:00:00Z`,
-      }
-    ],
+    metrics: null, // No fake metrics - only real Withings data
+    workouts: [], // No fake workouts - only real Withings workouts
     todos: [],
     supplements: [],
   };
