@@ -89,20 +89,22 @@ export function DayColumn({
           )}
         </div>
         
-        {/* Supplements Section - Fixed height for all days */}
-        <div style={{ minHeight: "80px" }} className="bg-gradient-to-br from-purple-50/50 to-blue-50/50 border border-purple-200/30 rounded p-1">
+        {/* Supplements Section - Fixed height aligned with todos */}
+        <div style={{ height: "80px" }} className="bg-gradient-to-br from-purple-50/50 to-blue-50/50 border border-purple-200/30 rounded p-1 flex flex-col">
           <div className="text-xs font-semibold text-base-content/70 mb-1">💊 Kosttillskott</div>
-          {settings.modules_enabled.supplements ? (
-            <SupplementTracker
-              supplements={dayData.supplements}
-              date={dayData.date}
-              onToggle={(key) => onSupplementToggle(dayData.date, key)}
-            />
-          ) : (
-            <div className="flex items-center justify-center" style={{ minHeight: "50px" }}>
-              <span className="text-xs text-base-content/50">Kosttillskott inaktiverade</span>
-            </div>
-          )}
+          <div className="flex-1">
+            {settings.modules_enabled.supplements ? (
+              <SupplementTracker
+                supplements={dayData.supplements}
+                date={dayData.date}
+                onToggle={(key) => onSupplementToggle(dayData.date, key)}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-xs text-base-content/50">Kosttillskott inaktiverade</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
