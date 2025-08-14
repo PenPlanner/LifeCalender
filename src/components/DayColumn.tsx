@@ -27,16 +27,12 @@ export function DayColumn({
   const isCurrentDay = isToday(date);
   
   // Calculate minimum heights based on week's maximum content
-  const maxWorkouts = Math.max(...weekData.days.map(day => day.workouts.length));
   const maxTodos = Math.max(...weekData.days.map(day => day.todos.length));
   
-  // Calculate actual content heights for this specific day
-  const currentWorkouts = dayData.workouts.length;
-  const currentTodos = dayData.todos.length;
-  
-  // Calculate the heights for the LONGEST modules in the week (including metrics + workouts)
-  const maxHealthModuleHeight = Math.max(60 + (maxWorkouts * 25), 120); // Larger for metrics + workouts
-  const maxTodoModuleHeight = Math.max(40 + (maxTodos * 20), 80); // Larger for todos
+  // For health module, we need consistent height since Withings workouts vary
+  // Base height for metrics + reasonable workout space
+  const maxHealthModuleHeight = 140; // Fixed height for consistent alignment
+  const maxTodoModuleHeight = Math.max(40 + (maxTodos * 20), 80); // Based on todos
   
   // Calculate the actual height needed for this day's content (for future use)
   // const thisHealthHeight = Math.max(60 + (currentWorkouts * 25), 120);
@@ -48,16 +44,18 @@ export function DayColumn({
       className={`day-column ${isCurrentDay ? 'day-column-today' : ''}`}
     >
       <div className="flex flex-col space-y-1.5">
-        {/* Apple Health Data Section - Always same height based on week's max */}
-        <div style={{ minHeight: `${maxHealthModuleHeight}px` }} className="bg-gradient-to-br from-red-50/50 to-orange-50/50 border border-red-200/30 rounded p-1">
+        {/* Apple Health Data Section - Fixed height with scroll if needed */}
+        <div style={{ height: `${maxHealthModuleHeight}px` }} className="bg-gradient-to-br from-red-50/50 to-orange-50/50 border border-red-200/30 rounded p-1 flex flex-col">
           <div className="text-xs font-semibold text-base-content/70 mb-1">🏥 Hälsodata</div>
-          {settings.modules_enabled.withings ? (
-            <AppleHealthModule dayData={dayData} />
-          ) : (
-            <div className="flex items-center justify-center" style={{ minHeight: `${maxHealthModuleHeight - 30}px` }}>
-              <span className="text-xs text-base-content/50">Hälsodata inaktiverad</span>
-            </div>
-          )}
+          <div className="flex-1 overflow-y-auto">
+            {settings.modules_enabled.withings ? (
+              <AppleHealthModule dayData={dayData} />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-xs text-base-content/50">Hälsodata inaktiverad</span>
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Todos Section - Always same height based on week's max */}
