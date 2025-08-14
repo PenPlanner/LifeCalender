@@ -47,18 +47,35 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
     }
   }, []);
 
-  useEffect(() => {
-    const fetchWithingsData = async () => {
-      if (!healthConfig) return;
+  const fetchWithingsData = async (forceRefresh = false) => {
+    if (!healthConfig) return;
 
-      const configStr = localStorage.getItem('withings-config');
-      if (!configStr) return;
+    const configStr = localStorage.getItem('withings-config');
+    if (!configStr) return;
+    
+    const config = JSON.parse(configStr);
+    
+    // Check if we're in demo mode (localhost with demo token)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isDemoMode = isLocalhost && config.accessToken === 'demo-token';
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh && !isDemoMode) {
+      const cacheKey = `withings-data-${dayData.date}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      const cacheTime = localStorage.getItem(`${cacheKey}-time`);
       
-      const config = JSON.parse(configStr);
-      
-      // Check if we're in demo mode (localhost with demo token)
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const isDemoMode = isLocalhost && config.accessToken === 'demo-token';
+      if (cachedData && cacheTime) {
+        const timeDiff = Date.now() - parseInt(cacheTime);
+        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+        
+        // Use cached data if less than 5 minutes old
+        if (timeDiff < fiveMinutes) {
+          setWithingsData(JSON.parse(cachedData));
+          return;
+        }
+      }
+    }
       
       if (isDemoMode) {
         // Use mock data for demo mode
@@ -141,6 +158,11 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           const data = await aggregator.getHealthDataForDate(new Date(dayData.date), enabledMetrics);
           console.log('Received health data:', data);
           setWithingsData(data);
+          
+          // Cache the data for 5 minutes
+          const cacheKey = `withings-data-${dayData.date}`;
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+          localStorage.setItem(`${cacheKey}-time`, Date.now().toString());
         }
       } catch (error) {
         console.error('Error fetching Withings data:', error);
@@ -149,7 +171,40 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
       }
     };
 
+  useEffect(() => {
     fetchWithingsData();
+  }, [dayData.date, healthConfig]);
+
+  // Auto-refresh every 5 minutes when page is visible
+  useEffect(() => {
+    if (!healthConfig) return;
+    
+    const interval = setInterval(() => {
+      if (!document.hidden) { // Only refresh when page is visible
+        fetchWithingsData(true); // Force refresh
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [dayData.date, healthConfig]);
+
+  // Refresh when page gets focus
+  useEffect(() => {
+    if (!healthConfig) return;
+    
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchWithingsData(); // Use cache if recent, otherwise refresh
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
   }, [dayData.date, healthConfig]);
   
   const getWorkoutBadge = (type: string) => {
