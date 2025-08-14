@@ -26,16 +26,22 @@ export function DayColumn({
   const date = new Date(dayData.date);
   const isCurrentDay = isToday(date);
   
-  // Calculate realistic maximum health module height for the busiest possible day
-  // Look at current week data to find the day with most workouts
-  const maxWorkoutsInWeek = Math.max(...weekData.days.map(day => day.workouts.length));
+  // Calculate height based ONLY on THIS SPECIFIC WEEK's actual content
+  // Find the day with most workouts in THIS week only
+  const maxWorkoutsThisWeek = Math.max(...weekData.days.map(day => day.workouts.length));
   
-  // Calculate height based on worst case scenario
-  const baseMetricsHeight = 90; // Steps, distance, calories
-  const maxPossibleWithingsWorkouts = Math.max(maxWorkoutsInWeek + 3, 5); // Add buffer for Withings + Apple workouts
-  const workoutHeight = maxPossibleWithingsWorkouts * 35; // Each workout ~35px
+  // Calculate realistic height for THIS week's busiest day
+  const baseMetricsHeight = 90; // Steps, distance, calories  
+  const estimatedWithingsWorkouts = maxWorkoutsThisWeek + 2; // Add small buffer for Withings data
+  const workoutHeight = estimatedWithingsWorkouts * 30; // Each workout ~30px
   
-  const maxHealthModuleHeight = baseMetricsHeight + workoutHeight;
+  // Total height for THIS week specifically
+  const maxHealthModuleHeight = Math.max(
+    baseMetricsHeight + workoutHeight,
+    140 // Minimum reasonable height
+  );
+  
+  console.log(`Week calculation: maxWorkouts=${maxWorkoutsThisWeek}, totalHeight=${maxHealthModuleHeight}px`);
   
   const maxTodos = Math.max(...weekData.days.map(day => day.todos.length));
   const maxTodoModuleHeight = Math.max(40 + (maxTodos * 20), 80);
