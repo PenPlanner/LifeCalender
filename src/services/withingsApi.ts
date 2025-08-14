@@ -414,19 +414,50 @@ export class WithingsApiService {
       
       const processedWorkouts = seriesWorkouts
         .filter((item: any) => workoutCategories.includes(item.category))
-        .map((item: any) => ({
-          id: item.id,
-          category: this.getWorkoutCategoryName(item.category),
-          startdate: item.startdate,
-          enddate: item.enddate,
-          duration: Math.round((item.enddate - item.startdate) / 60), // Convert to minutes
-          calories: Math.round(item.data?.manual_calories || item.data?.calories || 0),
-          steps: item.data?.steps || 0,
-          distance: Math.round((item.data?.distance || 0) / 1000 * 100) / 100, // Convert to km
-          intensity: item.data?.intensity || 0,
-          source: 'withings',
-          rawData: item
-        }));
+        .map((item: any) => {
+          // Log the raw data to see what duration fields are available
+          console.log('🏃 Raw workout data for duration analysis:', {
+            id: item.id,
+            category: item.category,
+            categoryName: this.getWorkoutCategoryName(item.category),
+            startdate: item.startdate,
+            enddate: item.enddate,
+            startDateTime: new Date(item.startdate * 1000).toLocaleString(),
+            endDateTime: new Date(item.enddate * 1000).toLocaleString(),
+            timeDiffSeconds: item.enddate - item.startdate,
+            timeDiffMinutes: Math.round((item.enddate - item.startdate) / 60),
+            data: item.data,
+            dataKeys: item.data ? Object.keys(item.data) : [],
+            allItemFields: Object.keys(item)
+          });
+          
+          // Calculate workout duration: enddate - startdate (both in Unix seconds)
+          const durationInSeconds = item.enddate - item.startdate;
+          const duration = Math.round(durationInSeconds / 60); // Convert seconds to minutes
+          
+          console.log('💪 Duration calculation:', {
+            startdate: item.startdate,
+            enddate: item.enddate,
+            durationInSeconds: durationInSeconds,
+            durationInMinutes: duration,
+            startTime: new Date(item.startdate * 1000).toLocaleTimeString(),
+            endTime: new Date(item.enddate * 1000).toLocaleTimeString()
+          });
+          
+          return {
+            id: item.id,
+            category: this.getWorkoutCategoryName(item.category),
+            startdate: item.startdate,
+            enddate: item.enddate,
+            duration: duration,
+            calories: Math.round(item.data?.manual_calories || item.data?.calories || 0),
+            steps: item.data?.steps || 0,
+            distance: Math.round((item.data?.distance || 0) / 1000 * 100) / 100, // Convert to km
+            intensity: item.data?.intensity || 0,
+            source: 'withings',
+            rawData: item
+          };
+        });
       
       console.log('Processed workouts from series:', processedWorkouts);
       
