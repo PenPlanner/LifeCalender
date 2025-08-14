@@ -56,18 +56,16 @@ export function DayColumn({
       className={`day-column ${isCurrentDay ? 'day-column-today' : ''}`}
     >
       <div className="flex flex-col space-y-1.5">
-        {/* Apple Health Data Section - EXACT same height for ALL days */}
-        <div style={{ height: `${maxHealthModuleHeight}px` }} className="bg-gradient-to-br from-red-50/50 to-orange-50/50 border border-red-200/30 rounded p-1 flex flex-col">
+        {/* Apple Health Data Section - Minimum height, expands as needed */}
+        <div style={{ minHeight: `${maxHealthModuleHeight}px` }} className="bg-gradient-to-br from-red-50/50 to-orange-50/50 border border-red-200/30 rounded p-1">
           <div className="text-xs font-semibold text-base-content/70 mb-1">🏥 Hälsodata</div>
-          <div className="flex-1 overflow-y-auto">
-            {settings.modules_enabled.withings ? (
-              <AppleHealthModule dayData={dayData} />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <span className="text-xs text-base-content/50">Hälsodata inaktiverad</span>
-              </div>
-            )}
-          </div>
+          {settings.modules_enabled.withings ? (
+            <AppleHealthModule dayData={dayData} />
+          ) : (
+            <div className="flex items-center justify-center py-4">
+              <span className="text-xs text-base-content/50">Hälsodata inaktiverad</span>
+            </div>
+          )}
         </div>
         
         {/* Todos Section - Always same height based on week's max */}
