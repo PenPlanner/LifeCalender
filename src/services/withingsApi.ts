@@ -327,6 +327,12 @@ export class WithingsApiService {
 
       const data = await response.json();
       console.log('Withings getworkouts response:', data);
+      console.log('RAW body content:', JSON.stringify(data.body, null, 2));
+      
+      // Check what fields exist in body
+      if (data.body) {
+        console.log('Available fields in body:', Object.keys(data.body));
+      }
 
       if (data.status !== 0) {
         console.error('Withings API Error:', data.error);
@@ -391,6 +397,20 @@ export class WithingsApiService {
 
       const workouts = data.body?.workouts || [];
       console.log('Extracted individual workouts:', workouts);
+      
+      // If no workouts, check if they're in other fields
+      if (workouts.length === 0) {
+        console.log('🔍 No workouts found, checking alternative fields...');
+        console.log('Body keys:', Object.keys(data.body || {}));
+        
+        // Check common alternative field names
+        const alternatives = ['activities', 'sessions', 'exercises', 'sports'];
+        alternatives.forEach(field => {
+          if (data.body && data.body[field]) {
+            console.log(`Found data in ${field}:`, data.body[field]);
+          }
+        });
+      }
       
       // Each workout should have: id, category, startdate, enddate, duration, calories, etc.
       return workouts;
