@@ -298,11 +298,16 @@ export class WithingsApiService {
       access_token: this.config.accessToken,
     });
 
+    // Try different date formats and expand date range
     if (startDate) {
-      params.append('startdateymd', startDate.toISOString().split('T')[0]);
+      // Expand date range to get more data - go back 7 days
+      const expandedStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      params.append('startdateymd', expandedStartDate.toISOString().split('T')[0]);
     }
     if (endDate) {
-      params.append('enddateymd', endDate.toISOString().split('T')[0]);
+      // Expand date range to get more data - go forward 7 days  
+      const expandedEndDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      params.append('enddateymd', expandedEndDate.toISOString().split('T')[0]);
     }
 
     console.log('Fetching workouts with params:', {
@@ -317,7 +322,7 @@ export class WithingsApiService {
     
     console.log('First attempt - /measure response:', data);
     
-    // If no workouts found or error, try different endpoint
+    // If no workouts found or error, try different approaches
     if (data.status !== 0 || !data.body.workouts || data.body.workouts.length === 0) {
       console.log('Trying alternative endpoint: /sport');
       const response2 = await fetch(`${this.baseUrl}/sport?${params}`);
@@ -326,6 +331,81 @@ export class WithingsApiService {
       
       if (data2.status === 0 && data2.body) {
         data = data2;
+      }
+      
+      // Try using Unix timestamps instead of YMD format
+      if (!data.body.workouts || data.body.workouts.length === 0) {
+        console.log('Trying with Unix timestamps');
+        const paramsUnix = new URLSearchParams({
+          action: 'getworkouts',
+          access_token: this.config.accessToken,
+        });
+        
+        if (startDate) {
+          const expandedStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+          paramsUnix.append('startdate', Math.floor(expandedStartDate.getTime() / 1000).toString());
+        }
+        if (endDate) {
+          const expandedEndDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+          paramsUnix.append('enddate', Math.floor(expandedEndDate.getTime() / 1000).toString());
+        }
+        
+        console.log('Trying Unix timestamp params:', paramsUnix.toString());
+        const response3 = await fetch(`${this.baseUrl}/measure?${paramsUnix}`);
+        const data3 = await response3.json();
+        console.log('Unix timestamp response:', data3);
+        
+        if (data3.status === 0 && data3.body && data3.body.workouts) {
+          data = data3;
+        }
+        
+        // Last resort: try without any date parameters
+        if (!data.body.workouts || data.body.workouts.length === 0) {
+          console.log('Trying without date parameters');
+          const paramsNoDate = new URLSearchParams({
+            action: 'getworkouts',
+            access_token: this.config.accessToken,
+          });
+          
+          console.log('No date params:', paramsNoDate.toString());
+          const response4 = await fetch(`${this.baseUrl}/measure?${paramsNoDate}`);
+          const data4 = await response4.json();
+          console.log('No date response:', data4);
+          
+          if (data4.status === 0 && data4.body && data4.body.workouts) {
+            data = data4;
+          }
+          
+          // Try getactivity instead - workouts might be part of activity data
+          if (!data.body.workouts || data.body.workouts.length === 0) {
+            console.log('Trying getactivity API for workout data');
+            const activityParams = new URLSearchParams({
+              action: 'getactivity',
+              access_token: this.config.accessToken,
+            });
+            
+            if (startDate) {
+              const expandedStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+              activityParams.append('startdateymd', expandedStartDate.toISOString().split('T')[0]);
+            }
+            if (endDate) {
+              const expandedEndDate = new Date(endDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+              activityParams.append('enddateymd', expandedEndDate.toISOString().split('T')[0]);
+            }
+            
+            console.log('Activity API params:', activityParams.toString());
+            const activityResponse = await fetch(`${this.baseUrl}/measure?${activityParams}`);
+            const activityData = await activityResponse.json();
+            console.log('Activity API response:', activityData);
+            
+            // Check if activity data contains workout information
+            if (activityData.status === 0 && activityData.body && activityData.body.activities) {
+              console.log('Found activity data, checking for workouts...');
+              // Use activity data as fallback
+              data = { ...data, body: { ...data.body, activities: activityData.body.activities } };
+            }
+          }
+        }
       }
     }
     
