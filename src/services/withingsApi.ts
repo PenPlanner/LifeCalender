@@ -519,32 +519,46 @@ export class WithingsHealthDataAggregator {
         const workouts = await this.api.getWorkouts(date, date);
         console.log('Fetched workouts from workout API:', workouts);
         
-        // If no workouts from dedicated API, check if activity data has workout info
+        // If no workouts from dedicated API, try intraday activity data for specific workout sessions
         if (!workouts || workouts.length === 0) {
-          console.log('No workouts from dedicated API, checking activity data...');
+          console.log('No workouts from dedicated API, checking intraday activity data...');
           
-          // Get fresh activity data specifically for workouts
-          const activities = await this.api.getActivityData(date, date);
-          console.log('Activity data for workout extraction:', activities);
-          
-          // Extract workout-like activities from activity data
-          const workoutActivities = activities.filter((activity: any) => {
-            // Look for activities that might be workouts (high intensity, longer duration, etc.)
-            return activity.intense && activity.intense > 0 || 
-                   activity.moderate && activity.moderate > 15 || // 15+ minutes of moderate activity
-                   activity.calories && activity.calories > 100;  // 100+ calories burned
-          }).map((activity: any) => ({
-            id: `activity-workout-${activity.date}`,
-            category: 'Träning',
-            duration: (activity.moderate || 0) + (activity.intense || 0), // Minutes
-            calories: activity.calories || 0,
-            startdate: Math.floor(new Date(activity.date).getTime() / 1000),
-            enddate: Math.floor(new Date(activity.date).getTime() / 1000) + ((activity.moderate || 0) + (activity.intense || 0)) * 60,
-            source: 'activity'
-          }));
-          
-          console.log('Extracted workout activities:', workoutActivities);
-          healthData.workouts = workoutActivities;
+          try {
+            // Get intraday activity data with heart rate and steps to identify workout periods
+            const intradayData = await this.api.getIntradayActivity(date, ['steps', 'heart_rate', 'calories']);
+            console.log('Intraday activity data:', intradayData);
+            
+            // Analyze intraday data to find workout sessions (high heart rate periods, step bursts)
+            const workoutSessions = this.extractWorkoutSessionsFromIntraday(intradayData, date);
+            console.log('Extracted workout sessions from intraday:', workoutSessions);
+            
+            if (workoutSessions.length > 0) {
+              healthData.workouts = workoutSessions;
+            } else {
+              // Fallback to daily activity data but with better logic
+              const activities = await this.api.getActivityData(date, date);
+              console.log('Fallback to daily activity data:', activities);
+              
+              // Only create workout if there's significant intense activity
+              const workoutActivities = activities.filter((activity: any) => {
+                return activity.intense && activity.intense > 10; // At least 10 minutes intense
+              }).map((activity: any) => ({
+                id: `activity-workout-${activity.date}`,
+                category: 'Träning',
+                duration: activity.intense || 0, // Only intense minutes
+                calories: Math.round((activity.calories || 0) * (activity.intense || 0) / ((activity.soft || 0) + (activity.moderate || 0) + (activity.intense || 0))), // Estimate calories for intense portion
+                startdate: Math.floor(new Date(activity.date + 'T12:00:00').getTime() / 1000), // Assume midday
+                enddate: Math.floor(new Date(activity.date + 'T12:00:00').getTime() / 1000) + (activity.intense || 0) * 60,
+                source: 'activity'
+              }));
+              
+              console.log('Fallback workout activities:', workoutActivities);
+              healthData.workouts = workoutActivities;
+            }
+          } catch (error) {
+            console.error('Error getting intraday data:', error);
+            healthData.workouts = [];
+          }
         } else {
           healthData.workouts = workouts;
         }
@@ -583,5 +597,94 @@ export class WithingsHealthDataAggregator {
     });
 
     return processed;
+  }
+
+  private extractWorkoutSessionsFromIntraday(intradayData: any, date: Date): any[] {
+    if (!intradayData || !intradayData.steps) {
+      return [];
+    }
+
+    const workoutSessions: any[] = [];
+    const stepData = intradayData.steps || {};
+    const heartRateData = intradayData.heart_rate || {};
+    
+    // Convert step data to time series
+    const timeEntries = Object.entries(stepData).map(([timestamp, steps]) => ({
+      timestamp: parseInt(timestamp),
+      steps: steps as number,
+      heartRate: heartRateData[timestamp] as number || 0
+    })).sort((a, b) => a.timestamp - b.timestamp);
+
+    console.log('Time series data for workout detection:', timeEntries.slice(0, 10)); // Log first 10 entries
+
+    // Find periods of high activity (workout sessions)
+    let sessionStart: number | null = null;
+    let sessionSteps = 0;
+    let sessionMaxHeartRate = 0;
+    let sessionDuration = 0;
+
+    for (let i = 0; i < timeEntries.length; i++) {
+      const entry = timeEntries[i];
+      const isHighActivity = entry.steps > 50 || entry.heartRate > 100; // Threshold for workout activity
+
+      if (isHighActivity && sessionStart === null) {
+        // Start of new session
+        sessionStart = entry.timestamp;
+        sessionSteps = entry.steps;
+        sessionMaxHeartRate = entry.heartRate;
+        sessionDuration = 60; // 1 minute
+      } else if (isHighActivity && sessionStart !== null) {
+        // Continue session
+        sessionSteps += entry.steps;
+        sessionMaxHeartRate = Math.max(sessionMaxHeartRate, entry.heartRate);
+        sessionDuration += 60; // Add 1 minute
+      } else if (!isHighActivity && sessionStart !== null && sessionDuration >= 15 * 60) {
+        // End of session (at least 15 minutes)
+        const estimatedCalories = Math.round(sessionSteps * 0.04 + sessionMaxHeartRate * 0.5); // Rough estimate
+        
+        workoutSessions.push({
+          id: `intraday-workout-${sessionStart}`,
+          category: sessionMaxHeartRate > 140 ? 'Intensiv träning' : 'Måttlig träning',
+          duration: Math.round(sessionDuration / 60), // Convert to minutes
+          calories: estimatedCalories,
+          startdate: sessionStart,
+          enddate: sessionStart + sessionDuration,
+          source: 'intraday',
+          maxHeartRate: sessionMaxHeartRate,
+          totalSteps: sessionSteps
+        });
+
+        // Reset for next session
+        sessionStart = null;
+        sessionSteps = 0;
+        sessionMaxHeartRate = 0;
+        sessionDuration = 0;
+      } else if (!isHighActivity && sessionStart !== null) {
+        // Gap in activity but session too short, reset
+        sessionStart = null;
+        sessionSteps = 0;
+        sessionMaxHeartRate = 0;
+        sessionDuration = 0;
+      }
+    }
+
+    // Handle session that goes to end of data
+    if (sessionStart !== null && sessionDuration >= 15 * 60) {
+      const estimatedCalories = Math.round(sessionSteps * 0.04 + sessionMaxHeartRate * 0.5);
+      
+      workoutSessions.push({
+        id: `intraday-workout-${sessionStart}`,
+        category: sessionMaxHeartRate > 140 ? 'Intensiv träning' : 'Måttlig träning',
+        duration: Math.round(sessionDuration / 60),
+        calories: estimatedCalories,
+        startdate: sessionStart,
+        enddate: sessionStart + sessionDuration,
+        source: 'intraday',
+        maxHeartRate: sessionMaxHeartRate,
+        totalSteps: sessionSteps
+      });
+    }
+
+    return workoutSessions;
   }
 }
