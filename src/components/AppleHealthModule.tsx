@@ -111,10 +111,11 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
               {
                 id: 'mock-workout-1',
                 category: 'Löpning',
-                duration: 1800, // 30 minutes in seconds
+                duration: 30, // 30 minutes
                 calories: 350,
                 startdate: Math.floor(new Date(dayData.date).getTime() / 1000),
-                enddate: Math.floor((new Date(dayData.date).getTime() + 30 * 60 * 1000) / 1000)
+                enddate: Math.floor((new Date(dayData.date).getTime() + 30 * 60 * 1000) / 1000),
+                source: 'activity'
               }
             ];
           }
@@ -263,8 +264,8 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
               {withingsData?.workouts?.map((workout: any) => (
                 <div key={`withings-${workout.id}`} className="bg-red-100/30 border border-red-200/50 rounded p-0.5">
                   <div className="flex items-center gap-0.5 mb-0.5">
-                    <div className="badge badge-primary badge-xs opacity-70 text-[10px] px-1 py-0">
-                      Withings
+                    <div className={`badge ${workout.source === 'activity' ? 'badge-secondary' : 'badge-primary'} badge-xs opacity-70 text-[10px] px-1 py-0`}>
+                      {workout.source === 'activity' ? 'Aktivitet' : 'Withings'}
                     </div>
                   </div>
                   <div className="text-[10px] font-semibold text-red-700 mb-0.5">
@@ -272,7 +273,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                   </div>
                   <div className="flex gap-1 text-[10px] text-red-600/80">
                     <span className="flex items-center gap-0.5">
-                      <Clock size={6} />{Math.round(workout.duration / 60)}m
+                      <Clock size={6} />{Math.round((workout.duration || 0) / (workout.source === 'activity' ? 1 : 60))}m
                     </span>
                     <span className="flex items-center gap-0.5">
                       <Flame size={6} />{Math.round(workout.calories || 0)}cal

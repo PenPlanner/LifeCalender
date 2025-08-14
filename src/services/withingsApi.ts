@@ -511,12 +511,43 @@ export class WithingsHealthDataAggregator {
         healthData.sleep = sleepData[0] || null;
       }
 
-      // Get workouts if enabled
+      // Get workouts if enabled - check both dedicated workout API and activity data
       if (enabledMetrics.includes('workouts')) {
         console.log('Fetching workouts for date:', date.toISOString().split('T')[0]);
+        
+        // First try the dedicated workout API
         const workouts = await this.api.getWorkouts(date, date);
-        console.log('Fetched workouts:', workouts);
-        healthData.workouts = workouts;
+        console.log('Fetched workouts from workout API:', workouts);
+        
+        // If no workouts from dedicated API, check if activity data has workout info
+        if (!workouts || workouts.length === 0) {
+          console.log('No workouts from dedicated API, checking activity data...');
+          
+          // Get fresh activity data specifically for workouts
+          const activities = await this.api.getActivityData(date, date);
+          console.log('Activity data for workout extraction:', activities);
+          
+          // Extract workout-like activities from activity data
+          const workoutActivities = activities.filter((activity: any) => {
+            // Look for activities that might be workouts (high intensity, longer duration, etc.)
+            return activity.intense && activity.intense > 0 || 
+                   activity.moderate && activity.moderate > 15 || // 15+ minutes of moderate activity
+                   activity.calories && activity.calories > 100;  // 100+ calories burned
+          }).map((activity: any) => ({
+            id: `activity-workout-${activity.date}`,
+            category: 'Träning',
+            duration: (activity.moderate || 0) + (activity.intense || 0), // Minutes
+            calories: activity.calories || 0,
+            startdate: Math.floor(new Date(activity.date).getTime() / 1000),
+            enddate: Math.floor(new Date(activity.date).getTime() / 1000) + ((activity.moderate || 0) + (activity.intense || 0)) * 60,
+            source: 'activity'
+          }));
+          
+          console.log('Extracted workout activities:', workoutActivities);
+          healthData.workouts = workoutActivities;
+        } else {
+          healthData.workouts = workouts;
+        }
       }
 
       return healthData;
