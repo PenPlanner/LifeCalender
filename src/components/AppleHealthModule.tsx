@@ -263,15 +263,6 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
               {/* Withings Workouts */}
               {withingsData?.workouts?.map((workout: any) => (
                 <div key={`withings-${workout.id}`} className="bg-red-100/30 border border-red-200/50 rounded p-0.5">
-                  <div className="flex items-center gap-0.5 mb-0.5">
-                    <div className={`badge ${
-                      workout.source === 'intraday' ? 'badge-success' : 
-                      workout.source === 'activity' ? 'badge-secondary' : 'badge-primary'
-                    } badge-xs opacity-70 text-[10px] px-1 py-0`}>
-                      {workout.source === 'intraday' ? 'Detekterad' : 
-                       workout.source === 'activity' ? 'Aktivitet' : 'Withings'}
-                    </div>
-                  </div>
                   <div className="text-[10px] font-semibold text-red-700 mb-0.5">
                     {workout.category || 'Träning'}
                   </div>
