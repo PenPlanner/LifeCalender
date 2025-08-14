@@ -277,7 +277,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                   </div>
                   <div className="flex gap-1 text-[10px] text-red-600/80">
                     <span className="flex items-center gap-0.5">
-                      <Clock size={6} />{Math.round((workout.duration || 0) / (workout.source === 'activity' ? 1 : 60))}m
+                      <Clock size={6} />{workout.duration || 0}m
                     </span>
                     <span className="flex items-center gap-0.5">
                       <Flame size={6} />{Math.round(workout.calories || 0)}cal
