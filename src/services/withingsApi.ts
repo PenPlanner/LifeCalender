@@ -395,29 +395,61 @@ export class WithingsApiService {
         return [];
       }
 
-      const workouts = data.body?.workouts || [];
-      console.log('Extracted individual workouts:', workouts);
+      // Withings returns workouts in 'series' field, not 'workouts'!
+      const rawWorkouts = data.body?.workouts || [];
+      const seriesWorkouts = data.body?.series || [];
       
-      // If no workouts, check if they're in other fields
-      if (workouts.length === 0) {
-        console.log('🔍 No workouts found, checking alternative fields...');
-        console.log('Body keys:', Object.keys(data.body || {}));
-        
-        // Check common alternative field names
-        const alternatives = ['activities', 'sessions', 'exercises', 'sports'];
-        alternatives.forEach(field => {
-          if (data.body && data.body[field]) {
-            console.log(`Found data in ${field}:`, data.body[field]);
-          }
-        });
-      }
+      console.log('Raw workouts field:', rawWorkouts);
+      console.log('Series field (actual workouts):', seriesWorkouts);
       
-      // Each workout should have: id, category, startdate, enddate, duration, calories, etc.
-      return workouts;
+      // Convert series to workout format - filter for actual workout categories
+      const workoutCategories = [
+        1,   // Walking  
+        2,   // Running
+        16,  // Weight training 
+        17,  // Cycling
+        36,  // Other
+        // Add more categories as needed
+      ];
+      
+      const processedWorkouts = seriesWorkouts
+        .filter((item: any) => workoutCategories.includes(item.category))
+        .map((item: any) => ({
+          id: item.id,
+          category: this.getWorkoutCategoryName(item.category),
+          startdate: item.startdate,
+          enddate: item.enddate,
+          duration: Math.round((item.enddate - item.startdate) / 60), // Convert to minutes
+          calories: Math.round(item.data?.manual_calories || item.data?.calories || 0),
+          steps: item.data?.steps || 0,
+          distance: Math.round((item.data?.distance || 0) / 1000 * 100) / 100, // Convert to km
+          intensity: item.data?.intensity || 0,
+          source: 'withings',
+          rawData: item
+        }));
+      
+      console.log('Processed workouts from series:', processedWorkouts);
+      
+      return processedWorkouts;
     } catch (error) {
       console.error('Network error calling Withings API:', error);
       return [];
     }
+  }
+
+  /**
+   * Get workout category name from Withings category number
+   */
+  private getWorkoutCategoryName(category: number): string {
+    const categories: Record<number, string> = {
+      1: 'Promenad',
+      2: 'Löpning', 
+      16: 'Styrketräning',
+      17: 'Cykling',
+      36: 'Annan träning',
+      // Add more as we discover them
+    };
+    return categories[category] || `Träning (${category})`;
   }
 
   /**
