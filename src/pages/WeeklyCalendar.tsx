@@ -32,7 +32,7 @@ const mockSettings: Settings = {
 const mockDayData = (date: string): DayData => {
   return {
     date,
-    metrics: null, // No fake metrics - only real Withings data
+    metrics: undefined, // No fake metrics - only real Withings data
     workouts: [], // No fake workouts - only real Withings workouts
     todos: [],
     supplements: [],
