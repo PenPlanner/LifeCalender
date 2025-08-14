@@ -299,12 +299,16 @@ export class WithingsApiService {
       access_token: this.config.accessToken,
     });
 
-    // Add date parameters if provided (using startdateymd/enddateymd format)
-    if (startDate) {
+    // Try different date parameter formats
+    if (startDate && endDate) {
+      // First try YMD format
       params.append('startdateymd', startDate.toISOString().split('T')[0]);
-    }
-    if (endDate) {
       params.append('enddateymd', endDate.toISOString().split('T')[0]);
+      
+      console.log('Using YMD date format:', {
+        startdateymd: startDate.toISOString().split('T')[0],
+        enddateymd: endDate.toISOString().split('T')[0]
+      });
     }
 
     console.log('Calling Withings getworkouts API:', {
@@ -313,10 +317,10 @@ export class WithingsApiService {
     });
 
     try {
+      // Use GET method for workouts API (not POST like measurements)
       const response = await fetch(`${this.baseUrl}/measure?${params}`, {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent': 'LifeCalendar/1.0'
         }
       });
@@ -326,13 +330,48 @@ export class WithingsApiService {
 
       if (data.status !== 0) {
         console.error('Withings API Error:', data.error);
+        
+        // If error with date params, try without date restrictions
+        if (startDate && endDate) {
+          console.log('Trying getworkouts without date parameters...');
+          const paramsNoDate = new URLSearchParams({
+            action: 'getworkouts',
+            access_token: this.config.accessToken,
+          });
+          
+          const response2 = await fetch(`${this.baseUrl}/measure?${paramsNoDate}`, {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'LifeCalendar/1.0'
+            }
+          });
+          
+          const data2 = await response2.json();
+          console.log('Withings getworkouts response (no dates):', data2);
+          
+          if (data2.status === 0) {
+            const allWorkouts = data2.body?.workouts || [];
+            console.log('All workouts from API:', allWorkouts);
+            
+            // Filter workouts to match the requested date range
+            const filteredWorkouts = allWorkouts.filter((workout: any) => {
+              const workoutDate = new Date(workout.startdate * 1000);
+              return workoutDate >= startDate && workoutDate <= endDate;
+            });
+            
+            console.log('Filtered workouts for date range:', filteredWorkouts);
+            return filteredWorkouts;
+          }
+        }
+        
         // Don't throw error, just return empty array
         return [];
       }
 
       const workouts = data.body?.workouts || [];
-      console.log('Extracted workouts:', workouts);
+      console.log('Extracted individual workouts:', workouts);
       
+      // Each workout should have: id, category, startdate, enddate, duration, calories, etc.
       return workouts;
     } catch (error) {
       console.error('Network error calling Withings API:', error);
