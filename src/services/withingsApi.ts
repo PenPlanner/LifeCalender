@@ -404,9 +404,11 @@ export class WithingsHealthDataAggregator {
         healthData.sleep = sleepData[0] || null;
       }
 
-      // Get workouts
-      const workouts = await this.api.getWorkouts(date, date);
-      healthData.workouts = workouts;
+      // Get workouts if enabled
+      if (enabledMetrics.includes('workouts')) {
+        const workouts = await this.api.getWorkouts(date, date);
+        healthData.workouts = workouts;
+      }
 
       return healthData;
     } catch (error) {

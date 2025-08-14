@@ -42,6 +42,9 @@ interface HealthDataConfig {
   // Blood Pressure
   systolicBP: boolean;
   diastolicBP: boolean;
+  
+  // Workouts/Training
+  workouts: boolean;
 }
 
 const defaultHealthConfig: HealthDataConfig = {
@@ -75,6 +78,9 @@ const defaultHealthConfig: HealthDataConfig = {
   // Blood Pressure - Default disabled
   systolicBP: false,
   diastolicBP: false,
+  
+  // Workouts - Default enabled
+  workouts: true,
 };
 
 export function AdminPage() {
@@ -458,6 +464,30 @@ export function AdminPage() {
                         </label>
                       ))}
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Workouts/Training */}
+              <div className="card bg-base-200">
+                <div className="card-body">
+                  <h3 className="card-title text-lg">
+                    <Activity size={20} />
+                    Träningspass
+                  </h3>
+                  <div className="space-y-3">
+                    <label className="cursor-pointer label">
+                      <span className="label-text text-sm">Träningspass från Withings</span>
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-primary checkbox-sm"
+                        checked={healthConfig.workouts}
+                        onChange={(e) => handleHealthConfigChange('workouts', e.target.checked)}
+                      />
+                    </label>
+                  </div>
+                  <div className="text-xs text-base-content/60 mt-2">
+                    Inkluderar alla träningspass registrerade i Withings-appen eller synkroniserade från andra appar.
                   </div>
                 </div>
               </div>

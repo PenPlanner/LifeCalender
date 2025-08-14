@@ -30,6 +30,7 @@ interface HealthDataConfig {
   sleepScore: boolean;
   systolicBP: boolean;
   diastolicBP: boolean;
+  workouts: boolean;
 }
 
 export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
@@ -102,6 +103,20 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
                 remsleepduration: 5400     // 1.5 hours
               }
             };
+          }
+
+          // Generate mock workout data
+          if (enabledMetrics.includes('workouts')) {
+            mockData.workouts = [
+              {
+                id: 'mock-workout-1',
+                category: 'Löpning',
+                duration: 1800, // 30 minutes in seconds
+                calories: 350,
+                startdate: Math.floor(new Date(dayData.date).getTime() / 1000),
+                enddate: Math.floor((new Date(dayData.date).getTime() + 30 * 60 * 1000) / 1000)
+              }
+            ];
           }
           
           setWithingsData(mockData);
@@ -239,7 +254,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
 
 
         {/* Workouts - Withings and Apple Health combined */}
-        {((withingsData?.workouts && withingsData.workouts.length > 0) || workouts.length > 0) && (
+        {healthConfig?.workouts && ((withingsData?.workouts && withingsData.workouts.length > 0) || workouts.length > 0) && (
           <div className="border-t border-red-200/50 pt-1">
             <div className="space-y-0.5">
               {/* Withings Workouts */}
@@ -289,7 +304,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           </div>
         )}
 
-        {(!withingsData?.workouts || withingsData.workouts.length === 0) && workouts.length === 0 && !isLoading && (
+        {healthConfig?.workouts && (!withingsData?.workouts || withingsData.workouts.length === 0) && workouts.length === 0 && !isLoading && (
           <div className="border-t border-red-200/50 pt-2">
             <div className="text-center text-xs text-red-500/70">
               😴 Vilodag
