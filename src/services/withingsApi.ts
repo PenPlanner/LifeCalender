@@ -348,18 +348,39 @@ export class WithingsApiService {
           
           const data2 = await response2.json();
           console.log('Withings getworkouts response (no dates):', data2);
+          console.log('RAW API body:', JSON.stringify(data2.body, null, 2));
           
           if (data2.status === 0) {
             const allWorkouts = data2.body?.workouts || [];
-            console.log('All workouts from API:', allWorkouts);
+            console.log('All workouts from API (count):', allWorkouts.length);
+            console.log('All workouts details:', JSON.stringify(allWorkouts, null, 2));
+            
+            // If no workouts at all, there might be a scope or API issue
+            if (allWorkouts.length === 0) {
+              console.warn('🚨 NO WORKOUTS FOUND IN API RESPONSE');
+              console.warn('This could mean:');
+              console.warn('1. No workouts recorded in Withings account');
+              console.warn('2. Missing API scope for workout data');  
+              console.warn('3. Workouts are stored in different endpoint');
+              console.warn('4. Account needs additional permissions');
+              return [];
+            }
             
             // Filter workouts to match the requested date range
             const filteredWorkouts = allWorkouts.filter((workout: any) => {
               const workoutDate = new Date(workout.startdate * 1000);
+              console.log('Checking workout date:', {
+                workoutStartdate: workout.startdate,
+                workoutDate: workoutDate.toISOString(),
+                requestedStart: startDate.toISOString(), 
+                requestedEnd: endDate.toISOString(),
+                isInRange: workoutDate >= startDate && workoutDate <= endDate
+              });
               return workoutDate >= startDate && workoutDate <= endDate;
             });
             
-            console.log('Filtered workouts for date range:', filteredWorkouts);
+            console.log(`Filtered ${filteredWorkouts.length} workouts from ${allWorkouts.length} total for date range`);
+            console.log('Filtered workouts:', JSON.stringify(filteredWorkouts, null, 2));
             return filteredWorkouts;
           }
         }
