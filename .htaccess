@@ -1,0 +1,49 @@
+# Apache configuration for LifeCalendar
+
+# Enable rewrite engine
+RewriteEngine On
+
+# Security headers
+Header always set X-Content-Type-Options nosniff
+Header always set X-Frame-Options DENY
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+# CORS headers for API
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+
+# Handle preflight requests
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^api/ [R=204,L]
+
+# API routes to PHP backend
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^api/(.*)$ backend/api/index.php [L,QSA]
+
+# PocketBase proxy (adjust URL based on your PocketBase setup)
+RewriteCond %{REQUEST_URI} ^/pb/
+RewriteRule ^pb/(.*)$ http://localhost:8090/$1 [P,L]
+
+# Frontend routing - serve index.html for non-API requests
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteCond %{REQUEST_URI} !^/pb/
+RewriteRule . /index.html [L]
+
+# Cache static assets
+<FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+    Header set Cache-Control "public, immutable"
+</FilesMatch>
+
+# Don't cache HTML files
+<FilesMatch "\.(html|htm)$">
+    ExpiresActive On
+    ExpiresDefault "access plus 0 seconds"
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+</FilesMatch>

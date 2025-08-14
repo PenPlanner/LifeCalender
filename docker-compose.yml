@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # PocketBase database and real-time backend
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: lifecalendar_pocketbase
+    restart: unless-stopped
+    command: 
+      - --encryptionEnv=PB_ENCRYPTION_KEY
+    environment:
+      - PB_ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pocketbase/pb_data:/pb_data
+      - ./pocketbase/pb_migrations:/pb_migrations
+      - ./pocketbase/pb_hooks:/pb_hooks
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PHP API server
+  php-api:
+    image: php:8.3-apache
+    container_name: lifecalendar_php_api
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/php.ini
+      - ./docker/apache/000-default.conf:/etc/apache2/sites-available/000-default.conf
+    environment:
+      - POCKETBASE_URL=http://pocketbase:8090
+      - POCKETBASE_ADMIN_EMAIL=${POCKETBASE_ADMIN_EMAIL}
+      - POCKETBASE_ADMIN_PASSWORD=${POCKETBASE_ADMIN_PASSWORD}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    command: >
+      bash -c "
+        a2enmod rewrite headers &&
+        a2enmod proxy proxy_http &&
+        docker-php-ext-install curl &&
+        apache2-foreground
+      "
+
+  # Frontend development server (remove in production)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: lifecalendar_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8080/api
+      - VITE_POCKETBASE_URL=http://localhost:8090
+    command: npm run dev
+
+  # Cron service for data synchronization
+  cron:
+    image: php:8.3-cli
+    container_name: lifecalendar_cron
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+    environment:
+      - POCKETBASE_URL=http://pocketbase:8090
+      - POCKETBASE_ADMIN_EMAIL=${POCKETBASE_ADMIN_EMAIL}
+      - POCKETBASE_ADMIN_PASSWORD=${POCKETBASE_ADMIN_PASSWORD}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    command: >
+      bash -c "
+        docker-php-ext-install curl &&
+        echo '0 */2 * * * cd /app && php cron/refresh-tokens.php' | crontab - &&
+        cron -f
+      "
+
+volumes:
+  pb_data:

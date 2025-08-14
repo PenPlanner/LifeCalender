@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DaisyUI theme customizations */
+:root {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Custom animations for LifeCalendar */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.3s ease-out;
+}
+
+/* Custom progress bars with DaisyUI styling */
+.progress-custom {
+  @apply progress w-full;
+  height: 12px;
+}
+
+/* Glassmorphism effect for cards */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Custom day column styling */
+.day-column {
+  @apply bg-base-100 shadow-sm hover:shadow-md transition-all duration-200 p-1 rounded-lg;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.day-column-today {
+  /* No special styling - today indication only in header */
+}
+
+/* Workout item with DaisyUI */
+.workout-card {
+  @apply card bg-info bg-opacity-10 border border-info border-opacity-30 cursor-move;
+  transition: all 0.2s ease;
+}
+
+.workout-card:hover {
+  @apply shadow-lg transform -translate-y-1;
+}
+
+/* Supplement styling */
+.supplement-badge {
+  @apply badge badge-lg cursor-pointer transition-all duration-200;
+}
+
+.supplement-taken {
+  @apply badge-success;
+}
+
+/* Todo item styling */
+.todo-checkbox {
+  @apply checkbox checkbox-primary checkbox-sm;
+}
+
+/* Custom metric cards */
+.metric-card {
+  @apply card bg-base-100 shadow-md hover:shadow-lg transition-all duration-200 p-4 mb-3;
+}
+
+/* Navigation improvements */
+.nav-glass {
+  @apply navbar bg-base-100 bg-opacity-80 backdrop-blur-md shadow-lg;
+}
+
+/* Custom button variants */
+.btn-gradient {
+  @apply btn btn-primary;
+  background: linear-gradient(135deg, oklch(var(--p)), oklch(var(--s)));
+}
+
+.btn-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
