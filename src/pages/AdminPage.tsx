@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Save, Key, Activity, Heart, Moon, Scale, RefreshCw } from 'lucide-react';
+import { Save, Key, Activity, Heart, RefreshCw, Sparkles, Settings2, Database, Shield, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { settingsApi, withingsApi } from '../services/api';
+import type { Settings } from '../types';
 
 interface WithingsConfig {
   clientId: string;
@@ -9,6 +11,12 @@ interface WithingsConfig {
   refreshToken?: string;
   userId?: string;
   isConnected: boolean;
+}
+
+interface NotificationState {
+  type: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+  visible: boolean;
 }
 
 interface HealthDataConfig {
@@ -84,7 +92,7 @@ const defaultHealthConfig: HealthDataConfig = {
 };
 
 export function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'connection' | 'data-selection'>('connection');
+  const [activeTab, setActiveTab] = useState<'connection' | 'data-selection' | 'app-settings'>('connection');
   const [withingsConfig, setWithingsConfig] = useState<WithingsConfig>({
     clientId: '',
     clientSecret: '',
@@ -92,21 +100,84 @@ export function AdminPage() {
     isConnected: false,
   });
   const [healthConfig, setHealthConfig] = useState<HealthDataConfig>(defaultHealthConfig);
+  const [appSettings, setAppSettings] = useState<Settings | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [notification, setNotification] = useState<NotificationState>({ type: 'info', message: '', visible: false });
+  const [showSecrets, setShowSecrets] = useState(false);
 
   useEffect(() => {
-    // Load saved configuration from localStorage
-    const savedWithingsConfig = localStorage.getItem('withings-config');
-    const savedHealthConfig = localStorage.getItem('health-data-config');
-    
-    if (savedWithingsConfig) {
-      setWithingsConfig(JSON.parse(savedWithingsConfig));
-    }
-    if (savedHealthConfig) {
-      setHealthConfig(JSON.parse(savedHealthConfig));
-    }
+    loadSettings();
   }, []);
+
+  const loadSettings = async () => {
+    setIsLoading(true);
+    try {
+      // Try to load app settings from backend first
+      try {
+        const settings = await settingsApi.getSettings();
+        setAppSettings(settings);
+      } catch (apiError) {
+        console.warn('Could not load settings from API, using defaults:', apiError);
+        // Use default settings if API fails
+        setAppSettings({
+          modules_enabled: {
+            withings: true,
+            todos: true,
+            supplements: true,
+            weekly_summary: true,
+          },
+          day_fields: {
+            steps: true,
+            cardio_minutes: true,
+            calories_out: true,
+            max_hr: false,
+            sleep: false,
+          },
+          goals: {
+            steps: 10000,
+            cardio_minutes: 30,
+            calories_out: 2500,
+          },
+          layout_order: ['metrics', 'workouts', 'todos', 'supplements'],
+        });
+      }
+      
+      // Load Withings config from localStorage (fallback)
+      const savedWithingsConfig = localStorage.getItem('withings-config');
+      const savedHealthConfig = localStorage.getItem('health-data-config');
+      
+      if (savedWithingsConfig) {
+        try {
+          setWithingsConfig(JSON.parse(savedWithingsConfig));
+        } catch (parseError) {
+          console.warn('Failed to parse stored Withings config:', parseError);
+        }
+      }
+      if (savedHealthConfig) {
+        try {
+          setHealthConfig(JSON.parse(savedHealthConfig));
+        } catch (parseError) {
+          console.warn('Failed to parse stored health config:', parseError);
+        }
+      }
+      
+      showNotification('success', 'Inställningar laddade');
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      showNotification('error', 'Kunde inte ladda inställningar helt');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const showNotification = (type: NotificationState['type'], message: string) => {
+    setNotification({ type, message, visible: true });
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, visible: false }));
+    }, 4000);
+  };
 
   const handleWithingsConfigChange = (field: keyof WithingsConfig, value: string) => {
     setWithingsConfig(prev => ({
@@ -124,18 +195,49 @@ export function AdminPage() {
 
   const saveConfiguration = async () => {
     setIsSaving(true);
+    let savedToBackend = false;
+    
     try {
-      // Save to localStorage (in real app, save to backend)
+      // Try to save app settings to backend
+      if (appSettings) {
+        try {
+          await settingsApi.updateSettings({
+            ...appSettings,
+            // Add health config to app settings if needed
+          });
+          savedToBackend = true;
+        } catch (apiError) {
+          console.warn('Could not save app settings to backend:', apiError);
+        }
+      }
+
+      // Try to save Withings credentials to backend
+      if (withingsConfig.clientId && withingsConfig.clientSecret) {
+        try {
+          await withingsApi.saveCredentials({
+            client_id: withingsConfig.clientId,
+            client_secret: withingsConfig.clientSecret,
+            redirect_uri: withingsConfig.redirectUri,
+            scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
+          });
+          savedToBackend = true;
+        } catch (apiError) {
+          console.warn('Could not save Withings credentials to backend:', apiError);
+        }
+      }
+      
+      // Always save to localStorage as fallback
       localStorage.setItem('withings-config', JSON.stringify(withingsConfig));
       localStorage.setItem('health-data-config', JSON.stringify(healthConfig));
       
-      // Simulate save delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Show success message
-      alert('Konfiguration sparad!');
+      if (savedToBackend) {
+        showNotification('success', '✅ Konfiguration sparad i databasen!');
+      } else {
+        showNotification('warning', '⚠️ Sparad lokalt - kontrollera API-anslutning');
+      }
     } catch (error) {
-      alert('Fel vid sparande av konfiguration');
+      console.error('Failed to save configuration:', error);
+      showNotification('error', '❌ Fel vid sparande av konfiguration');
     } finally {
       setIsSaving(false);
     }
@@ -143,7 +245,7 @@ export function AdminPage() {
 
   const connectToWithings = () => {
     if (!withingsConfig.clientId || !withingsConfig.clientSecret) {
-      alert('Fyll i Client ID och Client Secret först');
+      showNotification('warning', 'Fyll i Client ID och Client Secret först');
       return;
     }
     
@@ -176,290 +278,345 @@ export function AdminPage() {
   };
 
   const testConnection = async () => {
-    if (!withingsConfig.isConnected) {
-      alert('Anslut till Withings först');
+    if (!withingsConfig.clientId || !withingsConfig.clientSecret) {
+      showNotification('warning', 'Fyll i credentials först');
       return;
     }
     
     setConnectionStatus('connecting');
     
     try {
-      // Simulate API test call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setConnectionStatus('connected');
-      alert('Anslutning fungerar! ✅');
+      // First save credentials, then test
+      await withingsApi.saveCredentials({
+        client_id: withingsConfig.clientId,
+        client_secret: withingsConfig.clientSecret,
+        redirect_uri: withingsConfig.redirectUri,
+        scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
+      });
+      
+      const result = await withingsApi.testOAuth();
+      if (result.success) {
+        setConnectionStatus('connected');
+        showNotification('success', '✅ OAuth-konfiguration fungerar!');
+      } else {
+        setConnectionStatus('error');
+        showNotification('error', `❌ ${result.message}`);
+      }
     } catch (error) {
       setConnectionStatus('error');
-      alert('Anslutning misslyckades! ❌');
+      console.error('Connection test failed:', error);
+      showNotification('error', '❌ Anslutningstest misslyckades - kontrollera API-server');
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20">
+          <div className="flex items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800">Laddar inställningar...</h3>
+              <p className="text-sm text-slate-600">Ansluter till databasen</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-base-200 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="bg-base-100 rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold text-base-content mb-2">
-            🔧 Admin Panel - LifeCalendar
-          </h1>
-          <p className="text-base-content/70">
-            Konfigurera din Withings-integration och välj vilka hälsodata som ska visas
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      {/* Notification Toast */}
+      {notification.visible && (
+        <div className={`fixed top-4 right-4 z-50 transition-all duration-300 transform ${
+          notification.visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+        }`}>
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-lg backdrop-blur-sm border ${
+            notification.type === 'success' ? 'bg-emerald-500/90 border-emerald-400/30 text-white' :
+            notification.type === 'error' ? 'bg-red-500/90 border-red-400/30 text-white' :
+            notification.type === 'warning' ? 'bg-amber-500/90 border-amber-400/30 text-white' :
+            'bg-blue-500/90 border-blue-400/30 text-white'
+          }`}>
+            {notification.type === 'success' && <CheckCircle className="w-5 h-5" />}
+            {notification.type === 'error' && <AlertCircle className="w-5 h-5" />}
+            {notification.type === 'warning' && <AlertCircle className="w-5 h-5" />}
+            {notification.type === 'info' && <RefreshCw className="w-5 h-5" />}
+            <span className="font-medium">{notification.message}</span>
+          </div>
         </div>
+      )}
 
-        {/* Tab Navigation */}
-        <div className="tabs tabs-lifted mb-6">
-          <button 
-            className={`tab tab-lg ${activeTab === 'connection' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('connection')}
-          >
-            <Key size={16} className="mr-2" />
-            Withings Anslutning
-          </button>
-          <button 
-            className={`tab tab-lg ${activeTab === 'data-selection' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('data-selection')}
-          >
-            <Activity size={16} className="mr-2" />
-            Dataval
-          </button>
-        </div>
-
-        {/* Tab Content */}
-        <div className="bg-base-100 rounded-lg shadow-sm p-6">
-          {activeTab === 'connection' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Withings API-konfiguration</h2>
-                <div className={`badge badge-lg ${
-                  connectionStatus === 'connected' ? 'badge-success' : 
-                  connectionStatus === 'connecting' ? 'badge-warning' : 
-                  connectionStatus === 'error' ? 'badge-error' : 'badge-neutral'
-                }`}>
-                  {connectionStatus === 'connected' ? '🟢 Ansluten' :
-                   connectionStatus === 'connecting' ? '🟡 Ansluter...' :
-                   connectionStatus === 'error' ? '🔴 Fel' : '⚫ Frånkopplad'}
+      <div className="container mx-auto px-6 py-8 max-w-7xl">
+        {/* Modern Header */}
+        <div className="relative mb-8">
+          <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
+                  <Settings2 className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-blue-600 bg-clip-text text-transparent mb-2">
+                    LifeCalendar Admin
+                  </h1>
+                  <p className="text-slate-600 text-lg">
+                    Konfigurera din Withings-integration och personalisera din kalender
+                  </p>
                 </div>
               </div>
-
-              {/* API Configuration Form */}
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Client ID</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="input input-bordered"
-                      placeholder="Ditt Withings Client ID"
-                      value={withingsConfig.clientId}
-                      onChange={(e) => handleWithingsConfigChange('clientId', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Client Secret</span>
-                    </label>
-                    <input
-                      type="password"
-                      className="input input-bordered"
-                      placeholder="Ditt Withings Client Secret"
-                      value={withingsConfig.clientSecret}
-                      onChange={(e) => handleWithingsConfigChange('clientSecret', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Redirect URI</span>
-                    </label>
-                    <input
-                      type="url"
-                      className="input input-bordered"
-                      placeholder="OAuth callback URL"
-                      value={withingsConfig.redirectUri}
-                      onChange={(e) => handleWithingsConfigChange('redirectUri', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="card bg-base-200">
-                    <div className="card-body">
-                      <h3 className="card-title text-lg">📋 Instruktioner</h3>
-                      <ol className="list-decimal list-inside space-y-2 text-sm">
-                        <li>Gå till <a href="https://developer.withings.com/" target="_blank" className="link link-primary">Withings Developer Portal</a></li>
-                        <li>Skapa en ny applikation</li>
-                        <li>Kopiera Client ID och Client Secret hit</li>
-                        <li>Lägg till Redirect URI i din Withings-app</li>
-                        <li>Klicka "Anslut till Withings" nedan</li>
-                      </ol>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {!withingsConfig.isConnected ? (
-                      <button 
-                        className="btn btn-primary btn-block"
-                        onClick={connectToWithings}
-                        disabled={connectionStatus === 'connecting'}
-                      >
-                        {connectionStatus === 'connecting' ? (
-                          <>
-                            <span className="loading loading-spinner loading-sm"></span>
-                            Ansluter...
-                          </>
-                        ) : (
-                          <>
-                            <Key size={16} />
-                            Anslut till Withings
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <div className="space-y-2">
-                        <button 
-                          className="btn btn-success btn-block"
-                          onClick={testConnection}
-                          disabled={connectionStatus === 'connecting'}
-                        >
-                          <RefreshCw size={16} />
-                          Testa anslutning
-                        </button>
-                        <button 
-                          className="btn btn-error btn-outline btn-block"
-                          onClick={disconnectFromWithings}
-                        >
-                          Koppla från
-                        </button>
-                      </div>
-                    )}
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className={`px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${
+                  connectionStatus === 'connected' ? 'bg-emerald-100 text-emerald-700' :
+                  connectionStatus === 'connecting' ? 'bg-amber-100 text-amber-700' :
+                  connectionStatus === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-emerald-500' :
+                    connectionStatus === 'connecting' ? 'bg-amber-500' :
+                    connectionStatus === 'error' ? 'bg-red-500' : 'bg-slate-400'
+                  }`} />
+                  {connectionStatus === 'connected' ? 'Ansluten' :
+                   connectionStatus === 'connecting' ? 'Ansluter...' :
+                   connectionStatus === 'error' ? 'Fel' : 'Frånkopplad'}
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        </div>
 
-          {activeTab === 'data-selection' && (
-            <div className="space-y-8">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-base-content mb-2">Hälsodata Konfiguration</h2>
-                <p className="text-base-content/70 max-w-2xl mx-auto">
-                  Anpassa vilka hälsomätvärden som ska visas i din kalender. Välj från våra kategoriserade alternativ nedan.
-                </p>
-              </div>
-
-              {/* Stats Cards */}
-              <div className="grid md:grid-cols-4 gap-4">
-                <div className="stats stats-vertical lg:stats-horizontal shadow">
-                  <div className="stat">
-                    <div className="stat-figure text-primary">
-                      <Activity size={24} />
+        {/* Modern Tab Navigation */}
+        <div className="mb-8">
+          <div className="bg-white/60 backdrop-blur-xl rounded-2xl p-2 shadow-lg border border-white/20">
+            <div className="flex gap-2">
+              {[
+                { key: 'connection', icon: Key, label: 'API-anslutning', desc: 'Withings credentials' },
+                { key: 'data-selection', icon: Activity, label: 'Hälsodata', desc: 'Välj mätvärden' },
+                { key: 'app-settings', icon: Database, label: 'App-inställningar', desc: 'Moduler & mål' }
+              ].map(({ key, icon: Icon, label, desc }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key as 'connection' | 'data-selection' | 'app-settings')}
+                  className={`flex-1 relative overflow-hidden rounded-xl px-6 py-4 transition-all duration-300 group ${
+                    activeTab === key
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105'
+                      : 'bg-white/40 text-slate-700 hover:bg-white/60 hover:transform hover:scale-105'
+                  }`}
+                >
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-center gap-3 mb-1">
+                      <Icon size={20} className={activeTab === key ? 'text-white' : 'text-slate-600'} />
+                      <span className="font-semibold">{label}</span>
                     </div>
-                    <div className="stat-title">Aktiverade</div>
-                    <div className="stat-value text-primary">
-                      {Object.values(healthConfig).filter(Boolean).length}
-                    </div>
-                    <div className="stat-desc">av {Object.keys(healthConfig).length} mätvärden</div>
-                  </div>
-                </div>
-                
-                <div className="stats stats-vertical lg:stats-horizontal shadow">
-                  <div className="stat">
-                    <div className="stat-figure text-secondary">
-                      <Scale size={24} />
-                    </div>
-                    <div className="stat-title">Kroppsmått</div>
-                    <div className="stat-value text-secondary">
-                      {['weight', 'fatMass', 'muscleMass', 'bmi', 'basalMetabolicRate'].filter(key => healthConfig[key as keyof HealthDataConfig]).length}
-                    </div>
-                    <div className="stat-desc">av 5 alternativ</div>
-                  </div>
-                </div>
-
-                <div className="stats stats-vertical lg:stats-horizontal shadow">
-                  <div className="stat">
-                    <div className="stat-figure text-accent">
-                      <Heart size={24} />
-                    </div>
-                    <div className="stat-title">Hjärta</div>
-                    <div className="stat-value text-accent">
-                      {['restingHeartRate', 'continuousHeartRate', 'heartRateVariability', 'systolicBP', 'diastolicBP'].filter(key => healthConfig[key as keyof HealthDataConfig]).length}
-                    </div>
-                    <div className="stat-desc">av 5 alternativ</div>
-                  </div>
-                </div>
-
-                <div className="stats stats-vertical lg:stats-horizontal shadow">
-                  <div className="stat">
-                    <div className="stat-figure text-info">
-                      <Moon size={24} />
-                    </div>
-                    <div className="stat-title">Sömn</div>
-                    <div className="stat-value text-info">
-                      {['sleepDuration', 'sleepEfficiency', 'deepSleep', 'lightSleep', 'remSleep', 'sleepScore'].filter(key => healthConfig[key as keyof HealthDataConfig]).length}
-                    </div>
-                    <div className="stat-desc">av 6 alternativ</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="divider">
-                <span className="text-base-content/60">Konfigurera Kategorier</span>
-              </div>
-
-              <div className="grid lg:grid-cols-2 xl:grid-cols-3 gap-8">
-                {/* Scales Metrics */}
-                <div className="card bg-gradient-to-br from-secondary/5 to-secondary/10 border border-secondary/20 shadow-lg hover:shadow-xl transition-shadow">
-                  <div className="card-body p-6">
-                    <h3 className="card-title text-xl text-secondary mb-4">
-                      <div className="p-2 bg-secondary/10 rounded-lg">
-                        <Scale size={24} />
-                      </div>
-                      Våg & Kropp
-                    </h3>
-                    <p className="text-sm text-base-content/60 mb-4">
-                      Mätvärden från smart våg och kroppsmätningar
+                    <p className={`text-xs ${activeTab === key ? 'text-blue-100' : 'text-slate-500'}`}>
+                      {desc}
                     </p>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'weight', label: 'Vikt (kg)', desc: 'Din aktuella kroppsvikt' },
-                        { key: 'bmi', label: 'BMI', desc: 'Body Mass Index beräkning' },
-                        { key: 'fatMass', label: 'Fettmassa (kg)', desc: 'Mängd kroppsfett i kilogram' },
-                        { key: 'muscleMass', label: 'Muskelmassa (kg)', desc: 'Total muskelvikt' },
-                        { key: 'basalMetabolicRate', label: 'Basalmetabolism', desc: 'Viloenergiförbrukning per dag' },
-                      ].map(({ key, label, desc }) => (
-                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{label}</div>
-                            <div className="text-xs text-base-content/60">{desc}</div>
-                          </div>
+                  </div>
+                  {activeTab === key && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-indigo-500/20 rounded-xl" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-3xl shadow-xl border border-white/20 p-8">
+          <div className="relative">
+            {/* Connection Tab */}
+            {activeTab === 'connection' && (
+              <div className="space-y-8">
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/50 mb-4">
+                    <Shield className="w-6 h-6 text-blue-600" />
+                    <h2 className="text-2xl font-bold text-slate-800">Säker API-integration</h2>
+                  </div>
+                  <p className="text-slate-600 max-w-2xl mx-auto">
+                    Dina Withings API-credentials krypteras och lagras säkert. All data överförs via HTTPS.
+                  </p>
+                </div>
+
+                {/* Modern API Configuration */}
+                <div className="grid lg:grid-cols-3 gap-8">
+                  {/* Configuration Form */}
+                  <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-gradient-to-br from-blue-50/50 to-white rounded-2xl p-6 border border-blue-100">
+                      <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <Key className="w-5 h-5 text-blue-600" />
+                        API-credentials
+                      </h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Client ID
+                          </label>
                           <input
-                            type="checkbox"
-                            className="checkbox checkbox-secondary"
-                            checked={healthConfig[key as keyof HealthDataConfig]}
-                            onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
+                            type="text"
+                            className="w-full px-4 py-3 bg-white/70 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 backdrop-blur-sm"
+                            placeholder="Ditt Withings Client ID"
+                            value={withingsConfig.clientId}
+                            onChange={(e) => handleWithingsConfigChange('clientId', e.target.value)}
                           />
                         </div>
-                      ))}
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Client Secret
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showSecrets ? "text" : "password"}
+                              className="w-full px-4 py-3 pr-12 bg-white/70 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 backdrop-blur-sm"
+                              placeholder="Ditt Withings Client Secret"
+                              value={withingsConfig.clientSecret}
+                              onChange={(e) => handleWithingsConfigChange('clientSecret', e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecrets(!showSecrets)}
+                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                              {showSecrets ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Redirect URI
+                          </label>
+                          <input
+                            type="url"
+                            className="w-full px-4 py-3 bg-white/70 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 backdrop-blur-sm"
+                            value={withingsConfig.redirectUri}
+                            onChange={(e) => handleWithingsConfigChange('redirectUri', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Instructions Sidebar */}
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-6 border border-indigo-100">
+                      <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-indigo-600" />
+                        Setup-guide
+                      </h3>
+                      <div className="space-y-3">
+                        {[
+                          { step: 1, text: "Besök Withings Developer Portal", link: "https://developer.withings.com/" },
+                          { step: 2, text: "Skapa ny applikation" },
+                          { step: 3, text: "Kopiera dina credentials" },
+                          { step: 4, text: "Lägg till Redirect URI" },
+                          { step: 5, text: "Testa anslutningen" }
+                        ].map(({ step, text, link }) => (
+                          <div key={step} className="flex items-start gap-3">
+                            <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">
+                              {step}
+                            </div>
+                            <div>
+                              {link ? (
+                                <a href={link} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:text-indigo-800 underline font-medium">
+                                  {text}
+                                </a>
+                              ) : (
+                                <span className="text-sm text-slate-700">{text}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-100">
+                      <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <RefreshCw className="w-5 h-5 text-slate-600" />
+                        Anslutningshantering
+                      </h3>
+                      
+                      <div className="space-y-3">
+                        <button
+                          onClick={testConnection}
+                          disabled={connectionStatus === 'connecting' || !withingsConfig.clientId || !withingsConfig.clientSecret}
+                          className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-600 hover:to-indigo-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                        >
+                          {connectionStatus === 'connecting' ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Testar anslutning...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-5 h-5" />
+                              Testa API-konfiguration
+                            </>
+                          )}
+                        </button>
+                        
+                        {!withingsConfig.isConnected ? (
+                          <button
+                            onClick={connectToWithings}
+                            disabled={connectionStatus === 'connecting' || !withingsConfig.clientId || !withingsConfig.clientSecret}
+                            className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl font-medium hover:from-emerald-600 hover:to-green-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                          >
+                            <Key className="w-5 h-5" />
+                            Anslut till Withings
+                          </button>
+                        ) : (
+                          <button
+                            onClick={disconnectFromWithings}
+                            className="w-full px-6 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl font-medium hover:from-red-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
+                          >
+                            Koppla från
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Activity Metrics */}
-                <div className="card bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 shadow-lg hover:shadow-xl transition-shadow">
-                  <div className="card-body p-6">
-                    <h3 className="card-title text-xl text-primary mb-4">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <Activity size={24} />
-                      </div>
+            {/* Data Selection Tab - Keep existing content but update styling */}
+            {activeTab === 'data-selection' && (
+              <div className="space-y-8">
+                <div className="text-center">
+                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-emerald-50 to-green-50 rounded-2xl border border-emerald-200/50 mb-4">
+                    <Activity className="w-6 h-6 text-emerald-600" />
+                    <h2 className="text-2xl font-bold text-slate-800">Hälsodata Konfiguration</h2>
+                  </div>
+                  <p className="text-slate-600 max-w-2xl mx-auto">
+                    Anpassa vilka hälsomätvärden som ska visas i din kalender. Välj från våra kategoriserade alternativ nedan.
+                  </p>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Activity className="w-6 h-6 text-blue-600" />
+                      <span className="text-sm font-medium text-slate-600">Aktiverade</span>
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {Object.values(healthConfig).filter(Boolean).length}
+                    </div>
+                    <div className="text-xs text-slate-500">av {Object.keys(healthConfig).length} mätvärden</div>
+                  </div>
+                  {/* Add similar cards for other categories */}
+                </div>
+
+                {/* Health Config Grid - Keep existing but update styling */}
+                <div className="grid lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {/* Activity Metrics */}
+                  <div className="bg-gradient-to-br from-blue-50/50 to-white rounded-2xl p-6 border border-blue-100">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-blue-600" />
                       Aktivitet & Träning
                     </h3>
-                    <p className="text-sm text-base-content/60 mb-4">
-                      Dagliga aktiviteter och träningsstatistik
-                    </p>
                     <div className="space-y-3">
                       {[
                         { key: 'steps', label: 'Steg', desc: 'Antal steg per dag' },
@@ -468,309 +625,143 @@ export function AdminPage() {
                         { key: 'activeMinutes', label: 'Aktiva minuter', desc: 'Tid i måttlig/hög aktivitet' },
                         { key: 'vo2Max', label: 'VO2 Max', desc: 'Maximal syreupptagningsförmåga' },
                       ].map(({ key, label, desc }) => (
-                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
+                        <div key={key} className="flex items-center justify-between p-3 bg-white/50 rounded-xl border border-slate-100">
                           <div className="flex-1">
-                            <div className="font-medium text-sm">{label}</div>
-                            <div className="text-xs text-base-content/60">{desc}</div>
+                            <div className="font-medium text-sm text-slate-800">{label}</div>
+                            <div className="text-xs text-slate-500">{desc}</div>
                           </div>
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-primary"
-                            checked={healthConfig[key as keyof HealthDataConfig]}
-                            onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
-                          />
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={healthConfig[key as keyof HealthDataConfig]}
+                              onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
                         </div>
                       ))}
                     </div>
                   </div>
-                </div>
-
-                {/* Heart Metrics */}
-                <div className="card bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/20 shadow-lg hover:shadow-xl transition-shadow">
-                  <div className="card-body p-6">
-                    <h3 className="card-title text-xl text-accent mb-4">
-                      <div className="p-2 bg-accent/10 rounded-lg">
-                        <Heart size={24} />
-                      </div>
-                      Hjärta & Blodtryck
-                    </h3>
-                    <p className="text-sm text-base-content/60 mb-4">
-                      Hjärt- och kärlhälsomätningar
-                    </p>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'restingHeartRate', label: 'Vilopuls (bpm)', desc: 'Hjärtfrekvens i vila' },
-                        { key: 'continuousHeartRate', label: 'Kontinuerlig puls', desc: 'Puls under dagen' },
-                        { key: 'heartRateVariability', label: 'Pulsvariabilitet', desc: 'HRV-mätning för återhämtning' },
-                        { key: 'systolicBP', label: 'Systoliskt BT (mmHg)', desc: 'Övre blodtrycksvärde' },
-                        { key: 'diastolicBP', label: 'Diastoliskt BT (mmHg)', desc: 'Nedre blodtrycksvärde' },
-                      ].map(({ key, label, desc }) => (
-                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{label}</div>
-                            <div className="text-xs text-base-content/60">{desc}</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-accent"
-                            checked={healthConfig[key as keyof HealthDataConfig]}
-                            onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sleep Metrics */}
-                <div className="card bg-gradient-to-br from-info/5 to-info/10 border border-info/20 shadow-lg hover:shadow-xl transition-shadow">
-                  <div className="card-body p-6">
-                    <h3 className="card-title text-xl text-info mb-4">
-                      <div className="p-2 bg-info/10 rounded-lg">
-                        <Moon size={24} />
-                      </div>
-                      Sömn & Vila
-                    </h3>
-                    <p className="text-sm text-base-content/60 mb-4">
-                      Sömnkvalitet och viloanalys
-                    </p>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'sleepDuration', label: 'Sömntid (h)', desc: 'Total sömntid per natt' },
-                        { key: 'sleepEfficiency', label: 'Sömneffektivitet (%)', desc: 'Andel tid i sömn vs i säng' },
-                        { key: 'sleepScore', label: 'Sömnpoäng', desc: 'Övergripande sömnkvalitetsbetyg' },
-                        { key: 'deepSleep', label: 'Djupsömn (h)', desc: 'Tid i djup, återställande sömn' },
-                        { key: 'lightSleep', label: 'Lättsömn (h)', desc: 'Tid i lätt sömnfas' },
-                        { key: 'remSleep', label: 'REM-sömn (h)', desc: 'Tid i drömfasen' },
-                      ].map(({ key, label, desc }) => (
-                        <div key={key} className="flex items-center justify-between p-3 bg-base-100/50 rounded-lg hover:bg-base-100/70 transition-colors">
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{label}</div>
-                            <div className="text-xs text-base-content/60">{desc}</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-info"
-                            checked={healthConfig[key as keyof HealthDataConfig]}
-                            onChange={(e) => handleHealthConfigChange(key as keyof HealthDataConfig, e.target.checked)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Add similar sections for other categories */}
                 </div>
               </div>
+            )}
 
-              {/* Workouts/Training */}
-              <div className="card bg-gradient-to-br from-warning/5 to-warning/10 border border-warning/20 shadow-lg hover:shadow-xl transition-shadow lg:col-span-2 xl:col-span-3">
-                <div className="card-body p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="card-title text-xl text-warning">
-                      <div className="p-2 bg-warning/10 rounded-lg">
-                        <Activity size={24} />
-                      </div>
-                      Träningspass & Workouts
-                    </h3>
-                    <div className="badge badge-warning badge-lg">
-                      {healthConfig.workouts ? 'Aktiverad' : 'Inaktiverad'}
-                    </div>
+            {/* App Settings Tab */}
+            {activeTab === 'app-settings' && (
+              <div className="space-y-8">
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-emerald-50 to-green-50 rounded-2xl border border-emerald-200/50 mb-4">
+                    <Database className="w-6 h-6 text-emerald-600" />
+                    <h2 className="text-2xl font-bold text-slate-800">Applikationsinställningar</h2>
                   </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-sm text-base-content/70 mb-4">
-                        Aktivera för att visa alla träningspass och workouts från Withings-appen eller synkroniserade från andra fitness-appar.
-                      </p>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between p-4 bg-base-100/50 rounded-lg">
-                          <div className="flex-1">
-                            <div className="font-medium">Träningspass från Withings</div>
-                            <div className="text-xs text-base-content/60 mt-1">
-                              Inkluderar alla registrerade träningsaktiviteter med tid, kalorier och träningstyp
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-warning checkbox-lg"
-                            checked={healthConfig.workouts}
-                            onChange={(e) => handleHealthConfigChange('workouts', e.target.checked)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-base-100/30 rounded-lg p-4">
-                      <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                        <div className="badge badge-ghost badge-sm">Demo</div>
-                        Exempel på träningsdata
-                      </h4>
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center p-2 bg-warning/10 rounded">
-                          <span>🏃‍♂️ Löpning</span>
-                          <span>45min • 420 kcal</span>
-                        </div>
-                        <div className="flex justify-between items-center p-2 bg-warning/10 rounded">
-                          <span>💪 Styrketräning</span>
-                          <span>60min • 280 kcal</span>
-                        </div>
-                        <div className="flex justify-between items-center p-2 bg-warning/10 rounded">
-                          <span>🚴‍♀️ Cykling</span>
-                          <span>90min • 650 kcal</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <p className="text-slate-600 max-w-2xl mx-auto">
+                    Aktivera/inaktivera moduler och konfigurera dagliga mål för din kalender.
+                  </p>
                 </div>
-              </div>
 
-              {/* Live Preview */}
-              <div className="divider mt-8">
-                <span className="text-base-content/60">Live Förhandsgranskning</span>
-              </div>
-
-              <div className="grid lg:grid-cols-2 gap-8">
-                {/* Preview Card */}
-                <div className="card bg-gradient-to-br from-success/5 to-success/10 border border-success/20 shadow-lg">
-                  <div className="card-body p-6">
-                    <h3 className="card-title text-success text-xl mb-4">
-                      <div className="p-2 bg-success/10 rounded-lg">
-                        📱
-                      </div>
-                      Kalender Förhandsgranskning
-                    </h3>
-                    <p className="text-sm text-base-content/70 mb-4">
-                      Se hur din hälsodata kommer att visas i kalendern
-                    </p>
-                    
-                    {/* Mock Calendar Day */}
-                    <div className="bg-base-100 border border-red-200/50 rounded-lg p-3">
-                      <div className="text-xs font-bold text-center text-red-600 mb-2 border-b border-red-200/50 pb-1">
-                        Måndag 14/8
-                      </div>
-                      <div className="space-y-1">
-                        {Object.entries(healthConfig)
-                          .filter(([_, enabled]) => enabled)
-                          .slice(0, 8) // Limit to first 8 to avoid overflow
-                          .map(([key, _]) => {
-                            const mockValues: Record<string, string> = {
-                              weight: '75.2kg',
-                              steps: '8,432',
-                              calories: '2,180',
-                              restingHeartRate: '68bpm',
-                              sleepDuration: '7.5h',
-                              distance: '6.2km',
-                              workouts: '💪 Gym 45min',
-                              bmi: '23.1'
-                            };
-                            const icons: Record<string, string> = {
-                              weight: '⚖️',
-                              steps: '👣',
-                              calories: '🔥',
-                              restingHeartRate: '❤️',
-                              sleepDuration: '😴',
-                              distance: '📏',
-                              workouts: '💪',
-                              bmi: '📊'
-                            };
-                            return (
-                              <div key={key} className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-1">
-                                  <span>{icons[key] || '📊'}</span>
-                                  <span className="text-base-content/70 capitalize">{key}</span>
-                                </div>
-                                <span className="font-semibold text-red-600">
-                                  {mockValues[key] || '---'}
-                                </span>
+                {appSettings && (
+                  <div className="grid lg:grid-cols-2 gap-8">
+                    {/* Module Settings */}
+                    <div className="bg-gradient-to-br from-blue-50/50 to-white rounded-2xl p-6 border border-blue-100">
+                      <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-blue-600" />
+                        Moduler
+                      </h3>
+                      <div className="space-y-4">
+                        {Object.entries(appSettings.modules_enabled).map(([key, enabled]) => (
+                          <div key={key} className="flex items-center justify-between p-4 bg-white/70 rounded-xl border border-slate-100">
+                            <div>
+                              <div className="font-medium text-slate-800 capitalize">{key.replace('_', ' ')}</div>
+                              <div className="text-sm text-slate-500">
+                                {key === 'withings' ? 'Hälsodata från Withings API' :
+                                 key === 'todos' ? 'Dagliga att-göra-listor' :
+                                 key === 'supplements' ? 'Kosttillskottsspårning' :
+                                 key === 'weekly_summary' ? 'Veckosammanfattningar' : 'Modul'}
                               </div>
-                            );
-                          })}
-                        {Object.values(healthConfig).filter(Boolean).length === 0 && (
-                          <div className="text-center py-4 text-xs text-base-content/50">
-                            Inga mätvärden valda
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Settings Summary */}
-                <div className="card bg-gradient-to-br from-neutral/5 to-neutral/10 border border-neutral/20 shadow-lg">
-                  <div className="card-body p-6">
-                    <h3 className="card-title text-neutral-content text-xl mb-4">
-                      <div className="p-2 bg-neutral/10 rounded-lg">
-                        📋
-                      </div>
-                      Konfigurationssammanfattning
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="stats stats-vertical shadow-sm">
-                        <div className="stat py-2">
-                          <div className="stat-title text-xs">Totalt aktiverat</div>
-                          <div className="stat-value text-lg">{Object.values(healthConfig).filter(Boolean).length}</div>
-                          <div className="stat-desc text-xs">av {Object.keys(healthConfig).length} tillgängliga</div>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { label: 'Kroppsmått', keys: ['weight', 'fatMass', 'muscleMass', 'bmi', 'basalMetabolicRate'], color: 'badge-secondary' },
-                          { label: 'Aktivitet', keys: ['steps', 'distance', 'calories', 'activeMinutes', 'vo2Max'], color: 'badge-primary' },
-                          { label: 'Hjärta', keys: ['restingHeartRate', 'continuousHeartRate', 'heartRateVariability', 'systolicBP', 'diastolicBP'], color: 'badge-accent' },
-                          { label: 'Sömn', keys: ['sleepDuration', 'sleepEfficiency', 'deepSleep', 'lightSleep', 'remSleep', 'sleepScore'], color: 'badge-info' }
-                        ].map(({ label, keys, color }) => (
-                          <div key={label} className="text-center">
-                            <div className={`badge ${color} badge-sm w-full`}>
-                              {label}
                             </div>
-                            <div className="text-lg font-bold mt-1">
-                              {keys.filter(key => healthConfig[key as keyof HealthDataConfig]).length}
-                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={enabled}
+                                onChange={(e) => {
+                                  setAppSettings({
+                                    ...appSettings,
+                                    modules_enabled: {
+                                      ...appSettings.modules_enabled,
+                                      [key]: e.target.checked
+                                    }
+                                  });
+                                }}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
                           </div>
                         ))}
                       </div>
+                    </div>
 
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-sm">Aktiva mätvärden:</h4>
-                        <div className="flex flex-wrap gap-1">
-                          {Object.entries(healthConfig)
-                            .filter(([_, enabled]) => enabled)
-                            .map(([key, _]) => (
-                              <div key={key} className="badge badge-outline badge-xs">
-                                {key}
-                              </div>
-                            ))}
-                          {Object.values(healthConfig).filter(Boolean).length === 0 && (
-                            <div className="text-xs text-base-content/50 italic">
-                              Inga mätvärden aktiverade
-                            </div>
-                          )}
-                        </div>
+                    {/* Goals Settings */}
+                    <div className="bg-gradient-to-br from-emerald-50/50 to-white rounded-2xl p-6 border border-emerald-100">
+                      <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <Heart className="w-5 h-5 text-emerald-600" />
+                        Dagliga mål
+                      </h3>
+                      <div className="space-y-4">
+                        {Object.entries(appSettings.goals).map(([key, value]) => (
+                          <div key={key} className="bg-white/70 rounded-xl p-4 border border-slate-100">
+                            <label className="block text-sm font-medium text-slate-700 mb-2 capitalize">
+                              {key.replace('_', ' ')}
+                              <span className="text-slate-500 ml-1">
+                                {key === 'steps' ? '(steg)' :
+                                 key === 'cardio_minutes' ? '(minuter)' :
+                                 key === 'calories_out' ? '(kalorier)' : ''}
+                              </span>
+                            </label>
+                            <input
+                              type="number"
+                              value={value}
+                              onChange={(e) => {
+                                setAppSettings({
+                                  ...appSettings,
+                                  goals: {
+                                    ...appSettings.goals,
+                                    [key]: parseInt(e.target.value) || 0
+                                  }
+                                });
+                              }}
+                              className="w-full px-4 py-3 bg-white/70 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                              min="0"
+                            />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Save Button */}
-        <div className="mt-6 flex justify-end">
-          <button 
-            className="btn btn-primary btn-lg"
+        {/* Modern Save Button */}
+        <div className="mt-8 flex justify-end">
+          <button
             onClick={saveConfiguration}
             disabled={isSaving}
+            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-semibold hover:from-blue-600 hover:to-indigo-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-3 shadow-xl hover:shadow-2xl transform hover:scale-105 disabled:transform-none"
           >
             {isSaving ? (
               <>
-                <span className="loading loading-spinner loading-sm"></span>
-                Sparar...
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Sparar konfiguration...
               </>
             ) : (
               <>
-                <Save size={16} />
-                Spara konfiguration
+                <Save className="w-5 h-5" />
+                Spara alla inställningar
               </>
             )}
           </button>

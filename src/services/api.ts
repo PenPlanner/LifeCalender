@@ -207,10 +207,13 @@ export const mockApi = {
   },
 };
 
-// Environment-based API selection
-export const api = process.env.NODE_ENV === 'development' ? mockApi : {
+// Environment-based API selection - Always use real API now that backend is set up
+export const api = {
   settings: settingsApi,
   withings: withingsApi,
   todos: todosApi,
   supplements: supplementsApi,
 };
+
+// Export mock separately for development/fallback
+export const mockApiExport = mockApi;
