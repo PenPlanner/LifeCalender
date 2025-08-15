@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save, Key, Activity, Heart, RefreshCw, Sparkles, Settings2, Database, Shield, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
-import { settingsApi, withingsApi } from '../services/api';
+import { upstashApi } from '../services/upstash';
 import type { Settings } from '../types';
 
 interface WithingsConfig {
@@ -141,7 +141,7 @@ export function AdminPage() {
       
       // Try to load app settings from backend
       try {
-        const settings = await settingsApi.getSettings();
+        const settings = await upstashApi.settings.getSettings();
         setAppSettings(settings);
         apiWorking = true;
         console.log('Loaded settings from API:', settings);
@@ -172,9 +172,9 @@ export function AdminPage() {
       }
       
       if (apiWorking) {
-        showNotification('success', 'Inställningar laddade från databas');
+        showNotification('success', 'Inställningar laddade från Upstash');
       } else {
-        showNotification('warning', 'API inte tillgängligt - använder lokala inställningar');
+        showNotification('warning', 'Upstash inte tillgängligt - använder lokala inställningar');
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -218,12 +218,12 @@ export function AdminPage() {
       // Try to save app settings to backend
       if (appSettings) {
         try {
-          await settingsApi.updateSettings({
+          await upstashApi.settings.updateSettings({
             ...appSettings,
             // Add health config to app settings if needed
           });
           savedToBackend = true;
-          console.log('Saved app settings to backend');
+          console.log('Saved app settings to Upstash');
         } catch (apiError) {
           console.warn('Could not save app settings to backend:', apiError);
         }
@@ -232,23 +232,23 @@ export function AdminPage() {
       // Try to save Withings credentials to backend
       if (withingsConfig.clientId && withingsConfig.clientSecret) {
         try {
-          await withingsApi.saveCredentials({
+          await upstashApi.withings.saveCredentials({
             client_id: withingsConfig.clientId,
             client_secret: withingsConfig.clientSecret,
             redirect_uri: withingsConfig.redirectUri,
             scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
           });
           savedToBackend = true;
-          console.log('Saved Withings credentials to backend');
+          console.log('Saved Withings credentials to Upstash');
         } catch (apiError) {
-          console.warn('Could not save Withings credentials to backend:', apiError);
+          console.warn('Could not save Withings credentials to Upstash:', apiError);
         }
       }
       
       if (savedToBackend) {
-        showNotification('success', '✅ Sparad lokalt och i databasen!');
+        showNotification('success', '✅ Sparad lokalt och i Upstash!');
       } else {
-        showNotification('success', '✅ Sparad lokalt (databas ej tillgänglig)');
+        showNotification('success', '✅ Sparad lokalt (Upstash ej tillgänglig)');
       }
     } catch (error) {
       console.error('Failed to save configuration:', error);
@@ -306,26 +306,26 @@ export function AdminPage() {
       
       // Try to save credentials to backend and test
       try {
-        await withingsApi.saveCredentials({
+        await upstashApi.withings.saveCredentials({
           client_id: withingsConfig.clientId,
           client_secret: withingsConfig.clientSecret,
           redirect_uri: withingsConfig.redirectUri,
           scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
         });
         
-        const result = await withingsApi.testOAuth();
+        const result = await upstashApi.withings.testOAuth();
         if (result.success) {
           setConnectionStatus('connected');
-          showNotification('success', '✅ API-server och OAuth fungerar!');
+          showNotification('success', '✅ Upstash och OAuth fungerar!');
         } else {
           setConnectionStatus('error');
           showNotification('error', `❌ ${result.message}`);
         }
       } catch (apiError) {
         // API not available, but we can still validate the config format
-        console.warn('API not available for testing:', apiError);
+        console.warn('Upstash not available for testing:', apiError);
         setConnectionStatus('connected'); // Assume it's valid if properly formatted
-        showNotification('warning', '⚠️ Credentials sparade lokalt (API ej tillgängligt för test)');
+        showNotification('warning', '⚠️ Credentials sparade lokalt (Upstash ej tillgängligt för test)');
       }
     } catch (error) {
       setConnectionStatus('error');

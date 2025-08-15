@@ -16,6 +16,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tailwindcss/typography": "^0.5.16",
+    "@upstash/redis": "^1.35.3",
     "daisyui": "^5.0.50",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.539.0",
