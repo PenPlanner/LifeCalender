@@ -41,7 +41,7 @@ export function DayColumn({
     140 // Minimum reasonable height
   );
   
-  console.log(`Week calculation: maxWorkouts=${maxWorkoutsThisWeek}, totalHeight=${maxHealthModuleHeight}px`);
+  // console.log(`Week calculation: maxWorkouts=${maxWorkoutsThisWeek}, totalHeight=${maxHealthModuleHeight}px`);
   
   const maxTodos = Math.max(...weekData.days.map(day => day.todos.length));
   const maxTodoModuleHeight = Math.max(40 + (maxTodos * 20), 80);

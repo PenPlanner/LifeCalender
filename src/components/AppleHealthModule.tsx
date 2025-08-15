@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { DayData } from '../types';
 import { createWithingsApiFromConfig, WithingsHealthDataAggregator } from '../services/withingsApi';
+import { upstashApi } from '../services/upstashSimple';
 
 interface AppleHealthModuleProps {
   dayData: DayData;
@@ -50,10 +51,33 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
   const fetchWithingsData = async (forceRefresh = false) => {
     if (!healthConfig) return;
 
-    const configStr = localStorage.getItem('withings-config');
-    if (!configStr) return;
-    
-    const config = JSON.parse(configStr);
+    // Try to get config from Upstash first, then fallback to localStorage
+    let config;
+    try {
+      const upstashCredentials = await upstashApi.withings.getCredentials();
+      if (upstashCredentials) {
+        config = {
+          clientId: upstashCredentials.client_id,
+          clientSecret: upstashCredentials.client_secret,
+          redirectUri: upstashCredentials.redirect_uri,
+          accessToken: localStorage.getItem('withings-access-token'), // Keep tokens in localStorage for now
+          refreshToken: localStorage.getItem('withings-refresh-token'),
+          isConnected: !!localStorage.getItem('withings-access-token')
+        };
+        console.log('Using Upstash credentials for Withings API');
+      } else {
+        throw new Error('No Upstash credentials');
+      }
+    } catch (error) {
+      // Fallback to localStorage
+      console.log('Falling back to localStorage for Withings config');
+      const configStr = localStorage.getItem('withings-config');
+      if (!configStr) {
+        console.log('No Withings config found in localStorage either');
+        return;
+      }
+      config = JSON.parse(configStr);
+    }
     
     // Check if we're in demo mode (localhost with demo token)
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
