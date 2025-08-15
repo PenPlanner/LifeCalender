@@ -79,9 +79,10 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
       config = JSON.parse(configStr);
     }
     
-    // Check if we're in demo mode (localhost with demo token)
+    // Check if we're in demo mode (localhost with demo token OR when tokens are invalid)
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const isDemoMode = isLocalhost && config.accessToken === 'demo-token';
+    const hasValidTokens = config.accessToken && config.refreshToken;
+    const isDemoMode = isLocalhost || !hasValidTokens; // Use demo mode when no valid tokens
     
     // Check cache if not forcing refresh
     if (!forceRefresh && !isDemoMode) {
