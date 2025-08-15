@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save, Key, Activity, Heart, RefreshCw, Sparkles, Settings2, Database, Shield, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
-import { upstashApi } from '../services/upstash';
+import { upstashApi } from '../services/upstashSimple';
 import type { Settings } from '../types';
 
 interface WithingsConfig {

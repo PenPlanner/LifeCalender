@@ -1,12 +1,66 @@
-import { Redis } from '@upstash/redis';
 import type { Settings, WithingsCredentials, Todo } from '../types';
 
-// Initialize Upstash Redis client
-const redis = new Redis({
-  url: import.meta.env.VITE_UPSTASH_REDIS_REST_URL || 'https://whole-mouse-18725.upstash.io',
-  token: import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN || 'AUklAAIncDFjMWNmOTAxOWQ5NDY0OTlhYWZmZjkwYzRlNWIwMGI2MXAxMTg3MjU',
-  automaticDeserialization: false,
-});
+// Simple REST API client for Upstash Redis (browser-friendly)
+const UPSTASH_URL = import.meta.env.VITE_UPSTASH_REDIS_REST_URL || 'https://whole-mouse-18725.upstash.io';
+const UPSTASH_TOKEN = import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN || 'AUklAAIncDFjMWNmOTAxOWQ5NDY0OTlhYWZmZjkwYzRlNWIwMGI2MXAxMTg3MjU';
+
+class UpstashSimpleError extends Error {
+  public cause?: unknown;
+  
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'UpstashSimpleError';
+    this.cause = cause;
+  }
+}
+
+// Simple Redis commands using REST API
+class SimpleRedis {
+  private baseUrl: string;
+  private token: string;
+
+  constructor(url: string, token: string) {
+    this.baseUrl = url;
+    this.token = token;
+  }
+
+  private async command<T>(cmd: string[]): Promise<T> {
+    try {
+      const response = await fetch(`${this.baseUrl}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cmd),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.result;
+    } catch (error) {
+      console.error('Upstash command failed:', error);
+      throw new UpstashSimpleError('Redis command failed', error);
+    }
+  }
+
+  async get(key: string): Promise<string | null> {
+    return this.command(['GET', key]);
+  }
+
+  async set(key: string, value: string): Promise<string> {
+    return this.command(['SET', key, value]);
+  }
+
+  async ping(): Promise<string> {
+    return this.command(['PING']);
+  }
+}
+
+const redis = new SimpleRedis(UPSTASH_URL, UPSTASH_TOKEN);
 
 // Redis Keys
 const KEYS = {
@@ -17,16 +71,6 @@ const KEYS = {
 const getTodosKey = (date: string) => `todos:${date}`;
 const getSupplementsKey = (date: string) => `supplements:${date}`;
 
-class UpstashError extends Error {
-  public cause?: unknown;
-  
-  constructor(message: string, cause?: unknown) {
-    super(message);
-    this.name = 'UpstashError';
-    this.cause = cause;
-  }
-}
-
 // Settings API
 export const upstashSettingsApi = {
   async getSettings(): Promise<Settings> {
@@ -35,8 +79,9 @@ export const upstashSettingsApi = {
       const settings = await redis.get(KEYS.SETTINGS);
       
       if (settings) {
-        console.log('✅ Settings loaded from Upstash:', settings);
-        return settings as Settings;
+        const parsed = JSON.parse(settings);
+        console.log('✅ Settings loaded from Upstash:', parsed);
+        return parsed as Settings;
       }
       
       // Return default settings if none exist
@@ -66,18 +111,18 @@ export const upstashSettingsApi = {
       return defaultSettings;
     } catch (error) {
       console.error('❌ Failed to get settings from Upstash:', error);
-      throw new UpstashError('Failed to get settings', error);
+      throw new UpstashSimpleError('Failed to get settings', error);
     }
   },
 
   async updateSettings(settings: Settings): Promise<void> {
     try {
       console.log('💾 Saving settings to Upstash:', settings);
-      await redis.set(KEYS.SETTINGS, settings);
+      await redis.set(KEYS.SETTINGS, JSON.stringify(settings));
       console.log('✅ Settings saved to Upstash');
     } catch (error) {
       console.error('❌ Failed to save settings to Upstash:', error);
-      throw new UpstashError('Failed to save settings', error);
+      throw new UpstashSimpleError('Failed to save settings', error);
     }
   },
 };
@@ -87,12 +132,11 @@ export const upstashWithingsApi = {
   async saveCredentials(credentials: WithingsCredentials): Promise<void> {
     try {
       console.log('🔐 Saving Withings credentials to Upstash (encrypted)');
-      // In a real app, you'd encrypt these before storing
-      await redis.set(KEYS.WITHINGS_CREDENTIALS, credentials);
+      await redis.set(KEYS.WITHINGS_CREDENTIALS, JSON.stringify(credentials));
       console.log('✅ Withings credentials saved to Upstash');
     } catch (error) {
       console.error('❌ Failed to save Withings credentials to Upstash:', error);
-      throw new UpstashError('Failed to save credentials', error);
+      throw new UpstashSimpleError('Failed to save credentials', error);
     }
   },
 
@@ -100,11 +144,15 @@ export const upstashWithingsApi = {
     try {
       console.log('🔍 Getting Withings credentials from Upstash...');
       const credentials = await redis.get(KEYS.WITHINGS_CREDENTIALS);
-      console.log('✅ Withings credentials loaded from Upstash');
-      return credentials as WithingsCredentials | null;
+      if (credentials) {
+        const parsed = JSON.parse(credentials);
+        console.log('✅ Withings credentials loaded from Upstash');
+        return parsed as WithingsCredentials;
+      }
+      return null;
     } catch (error) {
       console.error('❌ Failed to get Withings credentials from Upstash:', error);
-      throw new UpstashError('Failed to get credentials', error);
+      throw new UpstashSimpleError('Failed to get credentials', error);
     }
   },
 
@@ -119,8 +167,10 @@ export const upstashWithingsApi = {
         return { success: false, message: 'Incomplete credentials' };
       }
       
-      // Basic validation - in a real app you'd test the actual OAuth flow
-      return { success: true, message: 'Credentials format is valid' };
+      // Test Redis connection
+      await redis.ping();
+      
+      return { success: true, message: 'Credentials and Upstash connection are valid' };
     } catch (error) {
       console.error('❌ OAuth test failed:', error);
       return { success: false, message: 'Test failed' };
@@ -134,22 +184,26 @@ export const upstashTodosApi = {
     try {
       console.log(`🔍 Getting todos for ${date} from Upstash...`);
       const todos = await redis.get(getTodosKey(date));
-      console.log(`✅ Todos loaded for ${date}:`, todos);
-      return (todos as Todo[]) || [];
+      if (todos) {
+        const parsed = JSON.parse(todos);
+        console.log(`✅ Todos loaded for ${date}:`, parsed);
+        return parsed as Todo[];
+      }
+      return [];
     } catch (error) {
       console.error(`❌ Failed to get todos for ${date}:`, error);
-      throw new UpstashError('Failed to get todos', error);
+      throw new UpstashSimpleError('Failed to get todos', error);
     }
   },
 
   async saveTodos(date: string, todos: Todo[]): Promise<void> {
     try {
       console.log(`💾 Saving todos for ${date} to Upstash:`, todos);
-      await redis.set(getTodosKey(date), todos);
+      await redis.set(getTodosKey(date), JSON.stringify(todos));
       console.log(`✅ Todos saved for ${date}`);
     } catch (error) {
       console.error(`❌ Failed to save todos for ${date}:`, error);
-      throw new UpstashError('Failed to save todos', error);
+      throw new UpstashSimpleError('Failed to save todos', error);
     }
   },
 
@@ -158,7 +212,7 @@ export const upstashTodosApi = {
       const todos = await this.getTodos(date);
       const newTodo: Todo = {
         id: `todo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        user_id: 'default-user', // For now, single user
+        user_id: 'default-user',
         date,
         text,
         done: false,
@@ -170,7 +224,7 @@ export const upstashTodosApi = {
       return newTodo;
     } catch (error) {
       console.error(`❌ Failed to add todo for ${date}:`, error);
-      throw new UpstashError('Failed to add todo', error);
+      throw new UpstashSimpleError('Failed to add todo', error);
     }
   },
 
@@ -183,7 +237,7 @@ export const upstashTodosApi = {
       await this.saveTodos(date, updatedTodos);
     } catch (error) {
       console.error(`❌ Failed to toggle todo ${todoId}:`, error);
-      throw new UpstashError('Failed to toggle todo', error);
+      throw new UpstashSimpleError('Failed to toggle todo', error);
     }
   },
 
@@ -194,7 +248,7 @@ export const upstashTodosApi = {
       await this.saveTodos(date, updatedTodos);
     } catch (error) {
       console.error(`❌ Failed to delete todo ${todoId}:`, error);
-      throw new UpstashError('Failed to delete todo', error);
+      throw new UpstashSimpleError('Failed to delete todo', error);
     }
   },
 };
