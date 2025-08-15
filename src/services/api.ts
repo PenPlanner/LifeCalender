@@ -15,6 +15,8 @@ class ApiError extends Error {
 
 async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  console.log(`Making API request to: ${url}`);
+  
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -23,14 +25,24 @@ async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T
     ...options,
   });
 
+  console.log(`API response status: ${response.status} for ${url}`);
+
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`API error response: ${errorText}`);
     throw new ApiError(
-      `API request failed: ${response.statusText}`,
+      `API request failed: ${response.statusText} - ${errorText.slice(0, 100)}`,
       response.status
     );
   }
 
-  return response.json();
+  const responseText = await response.text();
+  try {
+    return JSON.parse(responseText);
+  } catch (parseError) {
+    console.error('Failed to parse JSON response:', responseText.slice(0, 200));
+    throw new ApiError('Invalid JSON response from server', 500);
+  }
 }
 
 // Settings API
