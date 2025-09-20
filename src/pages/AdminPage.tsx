@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Save, Key, Activity, Heart, RefreshCw, Sparkles, Settings2, Database, Shield, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
-import { upstashApi } from '../services/upstashSimple';
+import { settingsApi, withingsApi } from '../services/api';
 import type { Settings } from '../types';
 
 interface WithingsConfig {
@@ -107,82 +107,73 @@ export function AdminPage() {
   const [notification, setNotification] = useState<NotificationState>({ type: 'info', message: '', visible: false });
   const [showSecrets, setShowSecrets] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     setIsLoading(true);
-    let apiWorking = false;
-    
     try {
-      // First load from localStorage immediately to show saved values
-      const savedWithingsConfig = localStorage.getItem('withings-config');
-      const savedHealthConfig = localStorage.getItem('health-data-config');
-      
-      if (savedWithingsConfig) {
-        try {
-          const config = JSON.parse(savedWithingsConfig);
-          setWithingsConfig(config);
-          console.log('Loaded Withings config from localStorage:', config);
-        } catch (parseError) {
-          console.warn('Failed to parse stored Withings config:', parseError);
-        }
-      }
-      if (savedHealthConfig) {
-        try {
-          const config = JSON.parse(savedHealthConfig);
-          setHealthConfig(config);
-          console.log('Loaded health config from localStorage:', config);
-        } catch (parseError) {
-          console.warn('Failed to parse stored health config:', parseError);
-        }
-      }
-      
-      // Try to load app settings from backend
-      try {
-        const settings = await upstashApi.settings.getSettings();
-        setAppSettings(settings);
-        apiWorking = true;
-        console.log('Loaded settings from API:', settings);
-      } catch (apiError) {
-        console.warn('Could not load settings from API, using defaults:', apiError);
-        // Use default settings if API fails
-        setAppSettings({
-          modules_enabled: {
-            withings: true,
-            todos: true,
-            supplements: true,
-            weekly_summary: true,
-          },
-          day_fields: {
-            steps: true,
-            cardio_minutes: true,
-            calories_out: true,
-            max_hr: false,
-            sleep: false,
-          },
-          goals: {
-            steps: 10000,
-            cardio_minutes: 30,
-            calories_out: 2500,
-          },
-          layout_order: ['metrics', 'workouts', 'todos', 'supplements'],
+      const settings = await settingsApi.getSettings();
+      setAppSettings(settings);
+    } catch (error) {
+      console.error('Failed to load app settings:', error);
+      setAppSettings({
+        modules_enabled: {
+          withings: true,
+          todos: true,
+          supplements: true,
+          weekly_summary: true,
+        },
+        day_fields: {
+          steps: true,
+          cardio_minutes: true,
+          calories_out: true,
+          max_hr: false,
+          sleep: false,
+        },
+        goals: {
+          steps: 10000,
+          cardio_minutes: 30,
+          calories_out: 2500,
+        },
+        layout_order: ['metrics', 'workouts', 'todos', 'supplements'],
+      });
+      showNotification('warning', 'Kör med standardinställningar (API ej nåbart)');
+    }
+
+    try {
+      const credentials = await withingsApi.getCredentials();
+      if (credentials) {
+        setWithingsConfig({
+          clientId: credentials.client_id,
+          clientSecret: credentials.client_secret,
+          redirectUri: credentials.redirect_uri,
+          isConnected: Boolean(credentials.isConnected),
         });
-      }
-      
-      if (apiWorking) {
-        showNotification('success', 'Inställningar laddade från Upstash');
       } else {
-        showNotification('warning', 'Upstash inte tillgängligt - använder lokala inställningar');
+        setWithingsConfig(prev => ({
+          ...prev,
+          redirectUri: `${window.location.origin}/api/withings/callback`,
+        }));
       }
     } catch (error) {
-      console.error('Failed to load settings:', error);
-      showNotification('error', 'Kunde inte ladda inställningar');
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to load Withings credentials:', error);
+      showNotification('warning', 'Kunde inte läsa Withings-credentials');
     }
-  };
+
+    const savedHealthConfig = localStorage.getItem('health-data-config');
+    if (savedHealthConfig) {
+      try {
+        const parsed = JSON.parse(savedHealthConfig);
+        setHealthConfig(parsed);
+      } catch (parseError) {
+        console.warn('Failed to parse stored health config:', parseError);
+      }
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const showNotification = (type: NotificationState['type'], message: string) => {
     setNotification({ type, message, visible: true });
@@ -210,20 +201,19 @@ export function AdminPage() {
     let savedToBackend = false;
     
     try {
-      // Always save to localStorage first (immediate save)
-      localStorage.setItem('withings-config', JSON.stringify(withingsConfig));
+      // Persist health configuration locally so användaren får snabb återställning
       localStorage.setItem('health-data-config', JSON.stringify(healthConfig));
-      console.log('Saved to localStorage:', { withingsConfig, healthConfig });
+      console.log('Saved health config to localStorage', healthConfig);
       
       // Try to save app settings to backend
       if (appSettings) {
         try {
-          await upstashApi.settings.updateSettings({
+          await settingsApi.updateSettings({
             ...appSettings,
             // Add health config to app settings if needed
           });
           savedToBackend = true;
-          console.log('Saved app settings to Upstash');
+          console.log('Saved app settings to PocketBase');
         } catch (apiError) {
           console.warn('Could not save app settings to backend:', apiError);
         }
@@ -232,23 +222,23 @@ export function AdminPage() {
       // Try to save Withings credentials to backend
       if (withingsConfig.clientId && withingsConfig.clientSecret) {
         try {
-          await upstashApi.withings.saveCredentials({
+          await withingsApi.saveCredentials({
             client_id: withingsConfig.clientId,
             client_secret: withingsConfig.clientSecret,
             redirect_uri: withingsConfig.redirectUri,
             scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
           });
           savedToBackend = true;
-          console.log('Saved Withings credentials to Upstash');
+          console.log('Saved Withings credentials to PocketBase');
         } catch (apiError) {
-          console.warn('Could not save Withings credentials to Upstash:', apiError);
+          console.warn('Could not save Withings credentials to backend:', apiError);
         }
       }
       
       if (savedToBackend) {
-        showNotification('success', '✅ Sparad lokalt och i Upstash!');
+        showNotification('success', '✅ Sparad i PocketBase!');
       } else {
-        showNotification('success', '✅ Sparad lokalt (Upstash ej tillgänglig)');
+        showNotification('success', '✅ Sparad lokalt (backend ej tillgänglig)');
       }
     } catch (error) {
       console.error('Failed to save configuration:', error);
@@ -258,27 +248,29 @@ export function AdminPage() {
     }
   };
 
-  const connectToWithings = () => {
+  const connectToWithings = async () => {
     if (!withingsConfig.clientId || !withingsConfig.clientSecret) {
       showNotification('warning', 'Fyll i Client ID och Client Secret först');
       return;
     }
     
     setConnectionStatus('connecting');
-    
-    // Save current config before OAuth
-    localStorage.setItem('withings-config', JSON.stringify(withingsConfig));
-    
-    // OAuth 2.0 flow URL for Withings
-    const authUrl = new URL('https://account.withings.com/oauth2_user/authorize2');
-    authUrl.searchParams.append('response_type', 'code');
-    authUrl.searchParams.append('client_id', withingsConfig.clientId);
-    authUrl.searchParams.append('redirect_uri', withingsConfig.redirectUri);
-    authUrl.searchParams.append('scope', 'user.info,user.metrics,user.activity,user.sleepevents');
-    authUrl.searchParams.append('state', 'lifecalendar-auth');
-    
-    // Redirect to Withings OAuth (full page redirect instead of popup)
-    window.location.href = authUrl.toString();
+    try {
+      await withingsApi.saveCredentials({
+        client_id: withingsConfig.clientId,
+        client_secret: withingsConfig.clientSecret,
+        redirect_uri: withingsConfig.redirectUri,
+        scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
+      });
+
+      const { authUrl, state } = await withingsApi.initiateOAuth();
+      sessionStorage.setItem('withings-oauth-state', state);
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error('Failed to initiate Withings OAuth', error);
+      setConnectionStatus('error');
+      showNotification('error', 'Kunde inte starta Withings-OAuth');
+    }
   };
 
   const disconnectFromWithings = () => {
@@ -301,31 +293,20 @@ export function AdminPage() {
     setConnectionStatus('connecting');
     
     try {
-      // Save to localStorage first
-      localStorage.setItem('withings-config', JSON.stringify(withingsConfig));
-      
-      // Try to save credentials to backend and test
-      try {
-        await upstashApi.withings.saveCredentials({
-          client_id: withingsConfig.clientId,
-          client_secret: withingsConfig.clientSecret,
-          redirect_uri: withingsConfig.redirectUri,
-          scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
-        });
-        
-        const result = await upstashApi.withings.testOAuth();
-        if (result.success) {
-          setConnectionStatus('connected');
-          showNotification('success', '✅ Upstash och OAuth fungerar!');
-        } else {
-          setConnectionStatus('error');
-          showNotification('error', `❌ ${result.message}`);
-        }
-      } catch (apiError) {
-        // API not available, but we can still validate the config format
-        console.warn('Upstash not available for testing:', apiError);
-        setConnectionStatus('connected'); // Assume it's valid if properly formatted
-        showNotification('warning', '⚠️ Credentials sparade lokalt (Upstash ej tillgängligt för test)');
+      await withingsApi.saveCredentials({
+        client_id: withingsConfig.clientId,
+        client_secret: withingsConfig.clientSecret,
+        redirect_uri: withingsConfig.redirectUri,
+        scopes: ['user.info', 'user.metrics', 'user.activity', 'user.sleepevents']
+      });
+
+      const result = await withingsApi.testOAuth();
+      if (result.success) {
+        setConnectionStatus('connected');
+        showNotification('success', `✅ ${result.message}`);
+      } else {
+        setConnectionStatus('error');
+        showNotification('error', `❌ ${result.message}`);
       }
     } catch (error) {
       setConnectionStatus('error');

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createWithingsApiFromConfig } from '../services/withingsApi';
+import { withingsApi } from '../services/api';
 
 export function WithingsCallback() {
   const [searchParams] = useSearchParams();
@@ -21,42 +21,29 @@ export function WithingsCallback() {
           return;
         }
 
-        if (!code || state !== 'lifecalendar-auth') {
+        if (!code) {
           setStatus('error');
           setMessage('Ogiltig callback från Withings');
           return;
         }
 
-        // Get saved config
-        const configStr = localStorage.getItem('withings-config');
-        if (!configStr) {
+        const expectedState = sessionStorage.getItem('withings-oauth-state');
+        sessionStorage.removeItem('withings-oauth-state');
+
+        if (expectedState && state && expectedState !== state) {
           setStatus('error');
-          setMessage('Ingen Withings-konfiguration hittad');
+          setMessage('Säkerhetskontroll misslyckades (state)');
           return;
         }
 
-        const config = JSON.parse(configStr);
-        
-        // Create API instance manually since we don't have tokens yet
-        const { WithingsApiService } = await import('../services/withingsApi');
-        const api = new WithingsApiService(config);
+        const userId = localStorage.getItem('lifecalendar-user-id') ?? 'user1';
 
-        // Exchange code for tokens  
-        console.log('Exchanging code for tokens...', { code, redirectUri: config.redirectUri });
-        const tokenData = await api.exchangeCodeForToken(code, config.redirectUri);
-        console.log('Token exchange successful:', tokenData);
-        
-        // Update config with tokens
-        const updatedConfig = {
-          ...config,
-          accessToken: tokenData.access_token,
-          refreshToken: tokenData.refresh_token,
-          userId: tokenData.userid,
-          isConnected: true,
-        };
+        console.log('Completing Withings OAuth for user', userId);
+        const result = await withingsApi.completeOAuth(code, userId);
 
-        // Save updated config
-        localStorage.setItem('withings-config', JSON.stringify(updatedConfig));
+        if (!result.success) {
+          throw new Error('OAuth-uppdatering misslyckades');
+        }
 
         setStatus('success');
         setMessage('Withings-anslutning lyckades! Omdirigerar...');

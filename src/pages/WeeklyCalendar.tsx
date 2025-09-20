@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { DayColumn } from '../components/DayColumn';
 import { getWeekDates, formatDate, getNextWeek, getPreviousWeek, getWeekLabel, isToday as checkIsToday } from '../utils/dateUtils';
@@ -41,11 +41,10 @@ const mockDayData = (date: string): DayData => {
 
 export function WeeklyCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [weekData, setWeekData] = useState<WeekData | null>(null);
   const [settings] = useState<Settings>(mockSettings);
   
-  const weekDates = getWeekDates(currentDate);
-  const weekLabel = getWeekLabel(currentDate);
+  const weekDates = useMemo(() => getWeekDates(currentDate), [currentDate]);
+  const weekLabel = useMemo(() => getWeekLabel(currentDate), [currentDate]);
   
   const [todos, setTodos] = useState<Todo[]>(() => {
     // Exempel träningsuppgifter för att bli riktigt fit
@@ -88,18 +87,23 @@ export function WeeklyCalendar() {
   });
   const [supplements, setSupplements] = useState<Supplement[]>([]);
   
-  useEffect(() => {
-    // Mock loading week data
-    const days = weekDates.map(date => mockDayData(formatDate(date)));
-    setWeekData({
-      startDate: formatDate(weekDates[0]),
-      days: days.map(day => ({
-        ...day,
-        todos: todos.filter(todo => todo.date === day.date),
-        supplements: supplements.filter(supp => supp.date === day.date),
-      })),
+  const weekData = useMemo<WeekData>(() => {
+    const days = weekDates.map((date) => {
+      const formattedDate = formatDate(date);
+      const baseDay = mockDayData(formattedDate);
+      return {
+        ...baseDay,
+        todos: todos.filter((todo) => todo.date === formattedDate),
+        supplements: supplements.filter((supp) => supp.date === formattedDate),
+      };
     });
-  }, [currentDate, todos, supplements, weekDates]);
+
+    const firstDay = days[0];
+    return {
+      startDate: firstDay ? firstDay.date : formatDate(currentDate),
+      days,
+    };
+  }, [currentDate, weekDates, todos, supplements]);
   
   const handleTodoAdd = (date: string, text: string) => {
     const newTodo: Todo = {
@@ -155,16 +159,6 @@ export function WeeklyCalendar() {
     setCurrentDate(prev => getNextWeek(prev));
   };
 
-  
-  if (!weekData) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-96">
-        <span className="loading loading-spinner loading-lg text-primary"></span>
-        <p className="mt-4 text-base-content/70">Laddar din vecka...</p>
-      </div>
-    );
-  }
-  
   return (
     <div className="flex flex-col p-1 gap-1">
       {/* Ultra Compact Navigation */}

@@ -39,7 +39,7 @@ async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T
   const responseText = await response.text();
   try {
     return JSON.parse(responseText);
-  } catch (parseError) {
+  } catch {
     console.error('Failed to parse JSON response:', responseText.slice(0, 200));
     throw new ApiError('Invalid JSON response from server', 500);
   }
@@ -61,6 +61,10 @@ export const settingsApi = {
 
 // Withings API
 export const withingsApi = {
+  async getCredentials(): Promise<(WithingsCredentials & { client_secret_masked?: string; isConnected?: boolean }) | null> {
+    return apiRequest<(WithingsCredentials & { client_secret_masked?: string; isConnected?: boolean }) | null>('/admin/withings/credentials');
+  },
+
   async saveCredentials(credentials: WithingsCredentials): Promise<void> {
     await apiRequest('/admin/withings/credentials', {
       method: 'POST',
@@ -76,8 +80,15 @@ export const withingsApi = {
     return apiRequest<WeekData>(`/withings/week?start=${startDate}`);
   },
 
-  async initiateOAuth(): Promise<{ authUrl: string }> {
-    return apiRequest<{ authUrl: string }>('/withings/oauth/initiate');
+  async initiateOAuth(): Promise<{ authUrl: string; state: string }> {
+    return apiRequest<{ authUrl: string; state: string }>('/withings/oauth/initiate');
+  },
+
+  async completeOAuth(code: string, userId: string): Promise<{ success: boolean; userid?: string; expires_at?: string }> {
+    return apiRequest('/withings/oauth/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code, userId }),
+    });
   },
 };
 

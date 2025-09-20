@@ -1,9 +1,33 @@
 import { Activity, Heart, Footprints, Clock, Flame, Scale, Moon, Droplets } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { DayData } from '../types';
-import { createWithingsApiFromConfig, WithingsHealthDataAggregator } from '../services/withingsApi';
-import { upstashApi } from '../services/upstashSimple';
+
+interface WithingsDayData {
+  measurements: Record<string, number>;
+  activity: {
+    steps?: number;
+    distance?: number;
+    calories?: number;
+    moderate?: number;
+    intense?: number;
+  } | null;
+  sleep: {
+    data: {
+      lightsleepduration?: number;
+      deepsleepduration?: number;
+      remsleepduration?: number;
+    };
+  } | null;
+  workouts: Array<{
+    id: string;
+    category: string;
+    duration: number;
+    calories: number;
+    distance: number;
+    steps: number;
+  }>;
+}
 
 interface AppleHealthModuleProps {
   dayData: DayData;
@@ -35,8 +59,9 @@ interface HealthDataConfig {
 }
 
 export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
-  const { metrics, workouts } = dayData;
-  const [withingsData, setWithingsData] = useState<any>(null);
+  const { workouts } = dayData;
+  const selectedDate = dayData.date;
+  const [withingsData, setWithingsData] = useState<WithingsDayData | null>(null);
   const [healthConfig, setHealthConfig] = useState<HealthDataConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -48,190 +73,51 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
     }
   }, []);
 
-  const fetchWithingsData = async (forceRefresh = false) => {
+  const fetchWithingsData = useCallback(async (forceRefresh = false) => {
     if (!healthConfig) return;
 
-    // Try to get config from Upstash first, then fallback to localStorage
-    let config;
-    try {
-      const upstashCredentials = await upstashApi.withings.getCredentials();
-      if (upstashCredentials) {
-        config = {
-          clientId: upstashCredentials.client_id,
-          clientSecret: upstashCredentials.client_secret,
-          redirectUri: upstashCredentials.redirect_uri,
-          accessToken: localStorage.getItem('withings-access-token'), // Keep tokens in localStorage for now
-          refreshToken: localStorage.getItem('withings-refresh-token'),
-          isConnected: !!localStorage.getItem('withings-access-token')
-        };
-        console.log('Using Upstash credentials for Withings API');
-      } else {
-        throw new Error('No Upstash credentials');
-      }
-    } catch (error) {
-      // Fallback to localStorage
-      console.log('Falling back to localStorage for Withings config');
-      const configStr = localStorage.getItem('withings-config');
-      if (!configStr) {
-        console.log('No Withings config found in localStorage either');
-        return;
-      }
-      config = JSON.parse(configStr);
-    }
-    
-    // Check if we're in demo mode (localhost with demo token)
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const isDemoMode = isLocalhost && config.accessToken === 'demo-token';
-    
-    // Check cache if not forcing refresh
-    if (!forceRefresh && !isDemoMode) {
-      const cacheKey = `withings-data-${dayData.date}`;
-      const cachedData = localStorage.getItem(cacheKey);
-      const cacheTime = localStorage.getItem(`${cacheKey}-time`);
-      
-      if (cachedData && cacheTime) {
-        const timeDiff = Date.now() - parseInt(cacheTime);
-        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
-        
-        // Use cached data if less than 5 minutes old
-        if (timeDiff < fiveMinutes) {
-          setWithingsData(JSON.parse(cachedData));
+    const cacheKey = `withings-data-${selectedDate}`;
+    const cacheTimestampKey = `${cacheKey}-time`;
+
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      const cacheTime = localStorage.getItem(cacheTimestampKey);
+      if (cached && cacheTime) {
+        const fiveMinutes = 5 * 60 * 1000;
+        if (Date.now() - Number(cacheTime) < fiveMinutes) {
+          setWithingsData(JSON.parse(cached));
           return;
         }
       }
     }
-      
-      if (isDemoMode) {
-        // Use mock data for demo mode
-        setIsLoading(true);
-        setTimeout(() => {
-          const enabledMetrics = Object.entries(healthConfig)
-            .filter(([_, enabled]) => enabled)
-            .map(([key, _]) => key);
-          
-          const mockData: any = {
-            measurements: {},
-            activity: null,
-            sleep: null,
-            workouts: []
-          };
-          
-          // Generate mock measurements based on enabled metrics
-          if (enabledMetrics.includes('weight')) mockData.measurements.Weight = 75.2;
-          if (enabledMetrics.includes('fatMass')) mockData.measurements['Fat Mass'] = 12.5;
-          if (enabledMetrics.includes('muscleMass')) mockData.measurements['Muscle Mass'] = 32.1;
-          if (enabledMetrics.includes('restingHeartRate')) mockData.measurements['Heart Rate'] = 68;
-          if (enabledMetrics.includes('systolicBP')) mockData.measurements['Systolic BP'] = 120;
-          if (enabledMetrics.includes('diastolicBP')) mockData.measurements['Diastolic BP'] = 80;
-          
-          // Generate mock activity data
-          if (enabledMetrics.some(m => ['steps', 'distance', 'calories', 'activeMinutes'].includes(m))) {
-            mockData.activity = {
-              steps: 8432,
-              distance: 6200, // meters
-              calories: 2180,
-              moderate: 25,
-              intense: 15
-            };
-          }
-          
-          // Generate mock sleep data
-          if (enabledMetrics.some(m => m.startsWith('sleep'))) {
-            mockData.sleep = {
-              data: {
-                lightsleepduration: 18000, // 5 hours in seconds
-                deepsleepduration: 7200,   // 2 hours
-                remsleepduration: 5400     // 1.5 hours
-              }
-            };
-          }
 
-          // Generate mock workout data
-          if (enabledMetrics.includes('workouts')) {
-            mockData.workouts = [
-              {
-                id: 'mock-workout-1',
-                category: 'Löpning',
-                duration: 30, // 30 minutes
-                calories: 350,
-                startdate: Math.floor(new Date(dayData.date).getTime() / 1000),
-                enddate: Math.floor((new Date(dayData.date).getTime() + 30 * 60 * 1000) / 1000),
-                source: 'activity'
-              }
-            ];
-          }
-          
-          setWithingsData(mockData);
-          setIsLoading(false);
-        }, 1000);
-        return;
+    const userId = localStorage.getItem('lifecalendar-user-id') ?? 'user1';
+    const params = new URLSearchParams({ date: selectedDate, userId });
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/withings/day?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`API svarade ${response.status}`);
       }
 
-      const api = createWithingsApiFromConfig();
-      if (!api) return;
-
-      setIsLoading(true);
-      try {
-        const aggregator = new WithingsHealthDataAggregator(api);
-        const enabledMetrics = Object.entries(healthConfig)
-          .filter(([_, enabled]) => enabled)
-          .map(([key, _]) => key);
-        
-        if (enabledMetrics.length > 0) {
-          console.log('Fetching health data for date:', dayData.date, 'with enabled metrics:', enabledMetrics);
-          const data = await aggregator.getHealthDataForDate(new Date(dayData.date), enabledMetrics);
-          console.log('Received health data:', data);
-          setWithingsData(data);
-          
-          // Cache the data for 5 minutes
-          const cacheKey = `withings-data-${dayData.date}`;
-          localStorage.setItem(cacheKey, JSON.stringify(data));
-          localStorage.setItem(`${cacheKey}-time`, Date.now().toString());
-        }
-      } catch (error) {
-        console.error('Error fetching Withings data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      const data: WithingsDayData = await response.json();
+      setWithingsData(data);
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(cacheTimestampKey, Date.now().toString());
+    } catch (error) {
+      console.error('Error fetching Withings data from backend:', error);
+      setWithingsData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedDate, healthConfig]);
 
   useEffect(() => {
     fetchWithingsData();
-  }, [dayData.date, healthConfig]);
+  }, [fetchWithingsData]);
 
-  // Auto-refresh every 5 minutes when page is visible
-  useEffect(() => {
-    if (!healthConfig) return;
-    
-    const interval = setInterval(() => {
-      if (!document.hidden) { // Only refresh when page is visible
-        fetchWithingsData(true); // Force refresh
-      }
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, [dayData.date, healthConfig]);
-
-  // Refresh when page gets focus
-  useEffect(() => {
-    if (!healthConfig) return;
-    
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchWithingsData(); // Use cache if recent, otherwise refresh
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
-    };
-  }, [dayData.date, healthConfig]);
-  
-  const getWorkoutBadge = (type: string) => {
+    const getWorkoutBadge = (type: string) => {
     const workoutType = type.toLowerCase();
     if (workoutType.includes('cardio') || workoutType.includes('löp')) return 'badge-info';
     if (workoutType.includes('styrk') || workoutType.includes('gym')) return 'badge-success';
@@ -239,9 +125,15 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
     return 'badge-primary';
   };
   
-  const renderMetricItem = (key: string, label: string, value: any, icon: any, unit: string = '') => {
-    if (!healthConfig?.[key as keyof HealthDataConfig]) return null;
-    
+  const renderMetricItem = (
+    key: keyof HealthDataConfig,
+    label: string,
+    value: number | string | null | undefined,
+    icon: ReactNode,
+    unit: string = ''
+  ) => {
+    if (!healthConfig?.[key]) return null;
+
     return (
       <div key={key} className="flex items-center justify-between">
         <div className="flex items-center gap-1">
@@ -249,7 +141,9 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           <span className="text-xs text-base-content/70">{label}</span>
         </div>
         <span className="text-xs font-semibold text-red-600">
-          {value ? `${typeof value === 'number' ? value.toLocaleString() : value}${unit}` : '-'}
+          {value !== undefined && value !== null
+            ? `${typeof value === 'number' ? value.toLocaleString() : value}${unit}`
+            : '-'}
         </span>
       </div>
     );
@@ -280,9 +174,9 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           {withingsData.activity && (
             <>
               {renderMetricItem('steps', 'Steg', withingsData.activity.steps, <Footprints size={10} className="text-red-600" />)}
-              {renderMetricItem('distance', 'Distans', (withingsData.activity.distance / 1000).toFixed(1), <Activity size={10} className="text-red-600" />, 'km')}
-              {renderMetricItem('calories', 'Kalorier', Math.round(withingsData.activity.calories), <Flame size={10} className="text-red-600" />)}
-              {renderMetricItem('activeMinutes', 'Aktiva min', withingsData.activity.moderate + withingsData.activity.intense, <Clock size={10} className="text-red-600" />, 'min')}
+              {renderMetricItem('distance', 'Distans', withingsData.activity.distance !== undefined ? (withingsData.activity.distance / 1000).toFixed(1) : undefined, <Activity size={10} className="text-red-600" />, 'km')}
+              {renderMetricItem('calories', 'Kalorier', withingsData.activity.calories !== undefined ? Math.round(withingsData.activity.calories) : undefined, <Flame size={10} className="text-red-600" />)}
+              {renderMetricItem('activeMinutes', 'Aktiva min', (withingsData.activity.moderate ?? 0) + (withingsData.activity.intense ?? 0), <Clock size={10} className="text-red-600" />, 'min')}
             </>
           )}
 
@@ -298,10 +192,10 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           {/* Sleep Metrics */}
           {withingsData.sleep && (
             <>
-              {renderMetricItem('sleepDuration', 'Sömntid', Math.round((withingsData.sleep.data.lightsleepduration + withingsData.sleep.data.deepsleepduration + withingsData.sleep.data.remsleepduration) / 3600), <Moon size={10} className="text-red-600" />, 'h')}
-              {renderMetricItem('deepSleep', 'Djupsömn', Math.round(withingsData.sleep.data.deepsleepduration / 3600), <Moon size={10} className="text-red-600" />, 'h')}
-              {renderMetricItem('lightSleep', 'Lättsömn', Math.round(withingsData.sleep.data.lightsleepduration / 3600), <Moon size={10} className="text-red-600" />, 'h')}
-              {renderMetricItem('remSleep', 'REM-sömn', Math.round(withingsData.sleep.data.remsleepduration / 3600), <Moon size={10} className="text-red-600" />, 'h')}
+              {renderMetricItem('sleepDuration', 'Sömntid', withingsData.sleep.data ? Math.round(((withingsData.sleep.data.lightsleepduration ?? 0) + (withingsData.sleep.data.deepsleepduration ?? 0) + (withingsData.sleep.data.remsleepduration ?? 0)) / 3600) : undefined, <Moon size={10} className="text-red-600" />, 'h')}
+              {renderMetricItem('deepSleep', 'Djupsömn', withingsData.sleep.data?.deepsleepduration !== undefined ? Math.round(withingsData.sleep.data.deepsleepduration / 3600) : undefined, <Moon size={10} className="text-red-600" />, 'h')}
+              {renderMetricItem('lightSleep', 'Lättsömn', withingsData.sleep.data?.lightsleepduration !== undefined ? Math.round(withingsData.sleep.data.lightsleepduration / 3600) : undefined, <Moon size={10} className="text-red-600" />, 'h')}
+              {renderMetricItem('remSleep', 'REM-sömn', withingsData.sleep.data?.remsleepduration !== undefined ? Math.round(withingsData.sleep.data.remsleepduration / 3600) : undefined, <Moon size={10} className="text-red-600" />, 'h')}
             </>
           )}
         </div>
@@ -336,11 +230,11 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
 
 
         {/* Workouts - Withings and Apple Health combined */}
-        {healthConfig?.workouts && ((withingsData?.workouts && withingsData.workouts.filter((w: any) => (w.duration || 0) >= 3).length > 0) || workouts.length > 0) && (
+        {healthConfig?.workouts && ((withingsData?.workouts && withingsData.workouts.filter((w) => (w.duration || 0) >= 3).length > 0) || workouts.length > 0) && (
           <div className="border-t border-red-200/50 pt-1">
             <div className="space-y-0.5">
               {/* Withings Workouts */}
-              {withingsData?.workouts?.filter((workout: any) => (workout.duration || 0) >= 3).map((workout: any) => {
+              {withingsData?.workouts?.filter((workout) => (workout.duration || 0) >= 3).map((workout) => {
                 // Check if this workout type should show distance
                 const showDistance = workout.category && [
                   'Promenad', 'Löpning', 'Cykling', 'Simning', 'Rodd', 'Skidor', 'Alpint', 
@@ -394,7 +288,7 @@ export function AppleHealthModule({ dayData }: AppleHealthModuleProps) {
           </div>
         )}
 
-        {healthConfig?.workouts && (!withingsData?.workouts || withingsData.workouts.filter((w: any) => (w.duration || 0) >= 3).length === 0) && workouts.length === 0 && !isLoading && (
+        {healthConfig?.workouts && (!withingsData?.workouts || withingsData.workouts.filter((w) => (w.duration || 0) >= 3).length === 0) && workouts.length === 0 && !isLoading && (
           <div className="border-t border-red-200/50 pt-2">
             <div className="text-center text-xs text-red-500/70">
               😴 Vilodag
